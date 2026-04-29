@@ -580,6 +580,161 @@ function AuditView() {
   )
 }
 
+function ProductsView() {
+  const [products, setProducts] = useState([])
+  const [providers, setProviders] = useState([])
+  const [tab, setTab] = useState('products')
+  const [openProd, setOpenProd] = useState(false)
+  const [openProv, setOpenProv] = useState(false)
+  const [pf, setPf] = useState({ name: '', code: '', description: '', providerId: '', basePrice: 0, commissionPercent: 0 })
+  const [pvf, setPvf] = useState({ name: '', code: '', contactEmail: '', contactPhone: '', notes: '' })
+
+  const load = async () => {
+    try {
+      const p = await api('/products'); setProducts(p.products)
+      const v = await api('/providers'); setProviders(v.providers)
+    } catch (e) { toast.error(e.message) }
+  }
+  useEffect(() => { load() }, [])
+
+  const createProd = async () => {
+    if (!pf.name.trim()) { toast.error('Name required'); return }
+    try {
+      await api('/products', { method: 'POST', body: JSON.stringify({ ...pf, providerId: pf.providerId || null }) })
+      toast.success('Product added'); setOpenProd(false); setPf({ name: '', code: '', description: '', providerId: '', basePrice: 0, commissionPercent: 0 }); load()
+    } catch (e) { toast.error(e.message) }
+  }
+  const createProv = async () => {
+    if (!pvf.name.trim()) { toast.error('Name required'); return }
+    try {
+      await api('/providers', { method: 'POST', body: JSON.stringify(pvf) })
+      toast.success('Provider added'); setOpenProv(false); setPvf({ name: '', code: '', contactEmail: '', contactPhone: '', notes: '' }); load()
+    } catch (e) { toast.error(e.message) }
+  }
+  const toggleActive = async (kind, item) => {
+    try {
+      await api(`/${kind}/${item.id}`, { method: 'PATCH', body: JSON.stringify({ active: !item.active }) })
+      toast.success(item.active ? 'Deactivated' : 'Activated'); load()
+    } catch (e) { toast.error(e.message) }
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold">Products & Service Providers</h2>
+          <p className="text-sm text-muted-foreground">Manage product catalog and provider relationships.</p>
+        </div>
+      </div>
+      <Tabs value={tab} onValueChange={setTab}>
+        <TabsList>
+          <TabsTrigger value="products">Products ({products.length})</TabsTrigger>
+          <TabsTrigger value="providers">Service Providers ({providers.length})</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="products" className="space-y-3">
+          <div className="flex justify-end">
+            <Button onClick={() => setOpenProd(true)}><Plus className="w-4 h-4 mr-1" /> New Product</Button>
+          </div>
+          <Card>
+            <Table>
+              <TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Code</TableHead><TableHead>Provider</TableHead><TableHead>Base Price</TableHead><TableHead>Commission %</TableHead><TableHead>Status</TableHead><TableHead></TableHead></TableRow></TableHeader>
+              <TableBody>
+                {products.map(p => (
+                  <TableRow key={p.id} className={!p.active ? 'opacity-50' : ''}>
+                    <TableCell className="font-medium">{p.name}</TableCell>
+                    <TableCell className="font-mono text-xs">{p.code || '—'}</TableCell>
+                    <TableCell className="text-sm">{p.providerName || '—'}</TableCell>
+                    <TableCell>R {Number(p.basePrice || 0).toFixed(2)}</TableCell>
+                    <TableCell>{p.commissionPercent || 0}%</TableCell>
+                    <TableCell><Badge variant="outline" className={p.active ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}>{p.active ? 'Active' : 'Inactive'}</Badge></TableCell>
+                    <TableCell><Button size="sm" variant="ghost" onClick={() => toggleActive('products', p)}>{p.active ? 'Deactivate' : 'Activate'}</Button></TableCell>
+                  </TableRow>
+                ))}
+                {products.length === 0 && <TableRow><TableCell colSpan={7} className="text-center text-sm text-muted-foreground py-12">No products yet. Add your first product.</TableCell></TableRow>}
+              </TableBody>
+            </Table>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="providers" className="space-y-3">
+          <div className="flex justify-end">
+            <Button onClick={() => setOpenProv(true)}><Plus className="w-4 h-4 mr-1" /> New Provider</Button>
+          </div>
+          <Card>
+            <Table>
+              <TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Code</TableHead><TableHead>Email</TableHead><TableHead>Phone</TableHead><TableHead>Status</TableHead><TableHead></TableHead></TableRow></TableHeader>
+              <TableBody>
+                {providers.map(p => (
+                  <TableRow key={p.id} className={!p.active ? 'opacity-50' : ''}>
+                    <TableCell className="font-medium">{p.name}</TableCell>
+                    <TableCell className="font-mono text-xs">{p.code || '—'}</TableCell>
+                    <TableCell className="text-sm">{p.contactEmail || '—'}</TableCell>
+                    <TableCell className="text-sm font-mono">{p.contactPhone || '—'}</TableCell>
+                    <TableCell><Badge variant="outline" className={p.active ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}>{p.active ? 'Active' : 'Inactive'}</Badge></TableCell>
+                    <TableCell><Button size="sm" variant="ghost" onClick={() => toggleActive('providers', p)}>{p.active ? 'Deactivate' : 'Activate'}</Button></TableCell>
+                  </TableRow>
+                ))}
+                {providers.length === 0 && <TableRow><TableCell colSpan={6} className="text-center text-sm text-muted-foreground py-12">No providers yet.</TableCell></TableRow>}
+              </TableBody>
+            </Table>
+          </Card>
+        </TabsContent>
+      </Tabs>
+
+      <Dialog open={openProd} onOpenChange={setOpenProd}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>New Product</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div><Label>Name *</Label><Input value={pf.name} onChange={e => setPf({ ...pf, name: e.target.value })} /></div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label>Code</Label><Input value={pf.code} onChange={e => setPf({ ...pf, code: e.target.value })} /></div>
+              <div>
+                <Label>Provider</Label>
+                <Select value={pf.providerId || 'none'} onValueChange={v => setPf({ ...pf, providerId: v === 'none' ? '' : v })}>
+                  <SelectTrigger><SelectValue placeholder="None" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None</SelectItem>
+                    {providers.filter(p => p.active).map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div><Label>Description</Label><Textarea value={pf.description} onChange={e => setPf({ ...pf, description: e.target.value })} /></div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label>Base Price (R)</Label><Input type="number" value={pf.basePrice} onChange={e => setPf({ ...pf, basePrice: e.target.value })} /></div>
+              <div><Label>Commission %</Label><Input type="number" value={pf.commissionPercent} onChange={e => setPf({ ...pf, commissionPercent: e.target.value })} /></div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setOpenProd(false)}>Cancel</Button>
+            <Button onClick={createProd}>Create</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={openProv} onOpenChange={setOpenProv}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>New Service Provider</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div><Label>Name *</Label><Input value={pvf.name} onChange={e => setPvf({ ...pvf, name: e.target.value })} /></div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label>Code</Label><Input value={pvf.code} onChange={e => setPvf({ ...pvf, code: e.target.value })} /></div>
+              <div><Label>Phone</Label><Input value={pvf.contactPhone} onChange={e => setPvf({ ...pvf, contactPhone: e.target.value })} /></div>
+            </div>
+            <div><Label>Email</Label><Input type="email" value={pvf.contactEmail} onChange={e => setPvf({ ...pvf, contactEmail: e.target.value })} /></div>
+            <div><Label>Notes</Label><Textarea value={pvf.notes} onChange={e => setPvf({ ...pvf, notes: e.target.value })} /></div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setOpenProv(false)}>Cancel</Button>
+            <Button onClick={createProv}>Create</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  )
+}
+
 function App() {
   const [user, setUser] = useState(null)
   const [view, setView] = useState('dashboard')
@@ -603,6 +758,7 @@ function App() {
       { key: 'callbacks', label: 'Callbacks', icon: Phone },
     ]
     if (user.role === 'qa' || user.role === 'super') items.push({ key: 'qa', label: 'QA Queue', icon: ClipboardCheck })
+    if (user.role === 'super') items.push({ key: 'products', label: 'Products', icon: MessageSquare })
     if (user.role === 'super') items.push({ key: 'audit', label: 'Audit Log', icon: FileText })
     return items
   }, [user])
@@ -644,6 +800,7 @@ function App() {
         {view === 'leads' && <LeadsView user={user} />}
         {view === 'callbacks' && <CallbacksView user={user} />}
         {view === 'qa' && <QAView user={user} />}
+        {view === 'products' && <ProductsView />}
         {view === 'audit' && <AuditView />}
       </main>
     </div>

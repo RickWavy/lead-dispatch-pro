@@ -209,7 +209,7 @@ backend:
 frontend:
   - task: "Login + role-based UI shell"
     implemented: true
-    working: "NA"
+    working: true
     file: "/app/app/page.js"
     stuck_count: 0
     priority: "high"
@@ -217,7 +217,67 @@ frontend:
     status_history:
         -working: "NA"
         -agent: "main"
-        -comment: "Not yet tested via automation. Awaiting user permission."
+        -comment: "Hooks rule violation fixed (useMemo moved above early returns). Login + dashboard verified via screenshot. Awaiting full Playwright run."
+        -working: true
+        -agent: "testing"
+        -comment: "Comprehensive testing completed: ✅ Login screen renders with title 'Sentinel CRM', 'Sign in' button, 'Seed Demo Users' button, password autofilled. ✅ Demo user seeding works (shows 'Already seeded' toast). ✅ Super user login successful with all 6 nav tabs (Dashboard, Leads, Callbacks, QA Queue, Products, Audit Log). ✅ 'Super User' badge and 'Sipho Admin' name displayed. ✅ Role-based access control verified for Agent (no Products/QA/Audit tabs), QA (has QA Queue), Field (same as Agent). All authentication and role-based UI working correctly."
+
+  - task: "Lead create dialog with SA ID validation"
+    implemented: true
+    working: true
+    file: "/app/app/page.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "Live SA ID validation displayed inline; valid 8001015009087 should show green check + gender + citizenship; invalid 9001015009087 should show red error."
+        -working: true
+        -agent: "testing"
+        -comment: "Comprehensive testing completed: ✅ Lead creation form opens with all fields. ✅ Valid SA ID (8001015009087) shows GREEN 'Valid · M · SA Citizen' indicator. ✅ Invalid SA ID (9001015009087) shows RED 'Invalid checksum' indicator. ✅ Lead creation successful with 'Lead created' toast. ✅ Lead appears in table with proper data. ✅ Source selection (Outbound) works correctly. All SA ID validation and lead creation functionality working perfectly."
+
+  - task: "Lead detail dialog (actions, comments, audit, QA)"
+    implemented: true
+    working: true
+    file: "/app/app/page.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "4 tabs: Details, Actions (disposition + callback + reassign + QA), Comments, Audit. Role-conditional sections."
+        -working: true
+        -agent: "testing"
+        -comment: "Comprehensive testing completed: ✅ Lead detail modal opens with all 4 tabs (Details, Actions, Comments, Audit). ✅ Actions tab: disposition update to 'Voicemail' works with 'Disposition updated' toast. ✅ Modal title shows 'Voicemail' badge and 'QA: Pending' badge after disposition change. ✅ Comments tab: comment addition works with 'Test note' appearing. ✅ Audit tab shows multiple entries (LEAD_CREATED, LEAD_UPDATED, COMMENT_ADDED). ✅ Search/filter functionality works (searching 'Khumalo' shows matching lead). All lead detail functionality working correctly."
+
+  - task: "Products & Service Providers UI (super only)"
+    implemented: true
+    working: true
+    file: "/app/app/page.js"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: false
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "New 'Products' top-nav tab visible only to super role. Has two sub-tabs: Products (CRUD with deactivate) and Service Providers (CRUD)."
+        -working: true
+        -agent: "testing"
+        -comment: "Comprehensive testing completed: ✅ Products tab visible only to Super user with two sub-tabs (Products and Service Providers). ✅ Service Provider creation: 'Hollard SA' created with phone '0860111222' and email 'ops@hollard.co.za'. ✅ Product creation: 'Vehicle Tracking Premium' created with code 'VTP', price R299.00, commission 15%, linked to Hollard SA provider. ✅ Product shows 'Active' badge initially. ✅ Deactivation functionality works (product shows 'Inactive' badge). ✅ 'Product added' toast confirmation. All Products and Service Providers functionality working correctly."
+
+  - task: "Backend: Products & Service Providers CRUD (super only)"
+    implemented: true
+    working: true
+    file: "/app/app/api/[[...path]]/route.js"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: false
+    status_history:
+        -working: true
+        -agent: "main"
+        -comment: "Manually verified: POST /api/providers and POST /api/products work for super; agent POST gets 403; all auth users can GET. Each create writes audit log entry."
 
 metadata:
   created_by: "main_agent"
@@ -227,12 +287,10 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Health, Auth seed, Login, JWT verify"
-    - "SA ID validation (Luhn)"
-    - "Lead CRUD with role scoping"
-    - "Dispositions, QA auto-trigger, Callbacks"
-    - "Append-only audit log + comments"
-    - "QA queue + role-aware dashboard"
+    - "Login + role-based UI shell"
+    - "Lead create dialog with SA ID validation"
+    - "Lead detail dialog (actions, comments, audit, QA)"
+    - "Products & Service Providers UI (super only)"
   stuck_tasks: []
   test_all: true
   test_priority: "high_first"
@@ -295,3 +353,54 @@ agent_communication:
       - Agent dashboard properly scoped (agent=1, admin=2)
       
       All endpoints responding correctly with expected status codes, proper role-based access control, and accurate data validation. No critical issues found.
+    -agent: "testing"
+    -message: |
+      ✅ COMPREHENSIVE FRONTEND TESTING COMPLETED - ALL TESTS PASSED (14/14)
+      
+      Executed complete end-to-end UI testing covering all scenarios from review request:
+      
+      🔐 Authentication & UI Shell:
+      - Login screen renders correctly (title, buttons, autofilled password)
+      - Demo user seeding functionality working ('Already seeded' toast)
+      - Super user login with all 6 navigation tabs visible
+      - Role-based navigation (Agent: no Products/QA/Audit, QA: has QA Queue, Field: same as Agent)
+      - User badges and names displayed correctly ('Super User', 'Sipho Admin', 'Call Agent', 'Naledi Agent')
+      
+      📊 Dashboard:
+      - 4 stat cards displayed (Total Leads, Sales, Conversion Rate, QA Pending)
+      - Disposition Breakdown section working
+      - Role-scoped counts (Super: 'Total Leads', Agent: 'My Leads')
+      
+      🆔 Lead Management:
+      - Lead creation form with all fields
+      - SA ID validation: Valid (8001015009087) shows GREEN 'Valid · M · SA Citizen'
+      - SA ID validation: Invalid (9001015009087) shows RED 'Invalid checksum'
+      - Lead creation successful with toast confirmation
+      - Lead appears in table with proper data
+      - Search/filter functionality working ('Khumalo' search)
+      
+      📋 Lead Detail Modal:
+      - Opens with all 4 tabs (Details, Actions, Comments, Audit)
+      - Disposition updates working ('Voicemail' → 'Disposition updated' toast)
+      - Modal title shows disposition and QA status badges
+      - Comment addition working ('Test note' appears)
+      - Audit tab shows multiple entries (LEAD_CREATED, LEAD_UPDATED, COMMENT_ADDED)
+      
+      🛍️ Products & Service Providers (Super Only):
+      - Products tab with two sub-tabs visible only to Super users
+      - Service Provider creation: 'Hollard SA' with contact details
+      - Product creation: 'Vehicle Tracking Premium' (VTP, R299.00, 15% commission)
+      - Product linked to provider correctly
+      - Active/Inactive status management working
+      - 'Product added' toast confirmations
+      
+      📞 Callbacks:
+      - Callbacks tab showing scheduled callbacks
+      - Global visibility with assignment functionality
+      - Proper state management ('Pending Assignment')
+      
+      🔍 QA Queue:
+      - QA Queue tab visible only to QA and Super users
+      - Shows leads with Pending status for review
+      
+      All UI components, role-based access control, form validations, and user interactions working correctly. No critical issues found.

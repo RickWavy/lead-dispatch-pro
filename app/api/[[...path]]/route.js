@@ -382,6 +382,112 @@ async function handler(request, { params }) {
     return json({ items: items.map(i => ({ ...i, _id: undefined })) })
   }
 
+  // ---------- PRODUCTS ----------
+  if (method === 'GET' && path === '/products') {
+    const items = await database.collection('products').find({}).sort({ createdAt: -1 }).toArray()
+    return json({ products: items.map(i => ({ ...i, _id: undefined })) })
+  }
+  if (method === 'POST' && path === '/products') {
+    const r = requireRole(user, 'super'); if (r) return r
+    const body = await request.json().catch(() => ({}))
+    if (!body.name) return err('Product name required')
+    const product = {
+      id: uuidv4(),
+      name: String(body.name).trim(),
+      code: body.code || null,
+      description: body.description || null,
+      providerId: body.providerId || null,
+      providerName: null,
+      basePrice: body.basePrice != null ? Number(body.basePrice) : 0,
+      commissionPercent: body.commissionPercent != null ? Number(body.commissionPercent) : 0,
+      active: body.active !== false,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }
+    if (product.providerId) {
+      const p = await database.collection('providers').findOne({ id: product.providerId })
+      product.providerName = p?.name || null
+    }
+    await database.collection('products').insertOne(product)
+    await audit(database, { actor: user, action: 'PRODUCT_CREATED', entity: 'product', entityId: product.id, after: product })
+    return json({ product: { ...product, _id: undefined } })
+  }
+  const productMatch = path.match(/^\/products\/([^\/]+)$/)
+  if (productMatch) {
+    const r = requireRole(user, 'super'); if (r) return r
+    const pid = productMatch[1]
+    const existing = await database.collection('products').findOne({ id: pid })
+    if (!existing) return err('Product not found', 404)
+    if (method === 'PATCH') {
+      const body = await request.json().catch(() => ({}))
+      const updates = {}
+      const allowed = ['name','code','description','providerId','basePrice','commissionPercent','active']
+      for (const k of allowed) if (body[k] !== undefined) updates[k] = body[k]
+      if (updates.basePrice != null) updates.basePrice = Number(updates.basePrice)
+      if (updates.commissionPercent != null) updates.commissionPercent = Number(updates.commissionPercent)
+      if (updates.providerId !== undefined) {
+        const p = updates.providerId ? await database.collection('providers').findOne({ id: updates.providerId }) : null
+        updates.providerName = p?.name || null
+      }
+      updates.updatedAt = new Date().toISOString()
+      await database.collection('products').updateOne({ id: pid }, { $set: updates })
+      await audit(database, { actor: user, action: 'PRODUCT_UPDATED', entity: 'product', entityId: pid, before: existing, after: { ...existing, ...updates } })
+      return json({ ok: true })
+    }
+    if (method === 'DELETE') {
+      await database.collection('products').updateOne({ id: pid }, { $set: { active: false, updatedAt: new Date().toISOString() } })
+      await audit(database, { actor: user, action: 'PRODUCT_DEACTIVATED', entity: 'product', entityId: pid, before: existing })
+      return json({ ok: true })
+    }
+  }
+
+  // ---------- SERVICE PROVIDERS ----------
+  if (method === 'GET' && path === '/providers') {
+    const items = await database.collection('providers').find({}).sort({ createdAt: -1 }).toArray()
+    return json({ providers: items.map(i => ({ ...i, _id: undefined })) })
+  }
+  if (method === 'POST' && path === '/providers') {
+    const r = requireRole(user, 'super'); if (r) return r
+    const body = await request.json().catch(() => ({}))
+    if (!body.name) return err('Provider name required')
+    const provider = {
+      id: uuidv4(),
+      name: String(body.name).trim(),
+      code: body.code || null,
+      contactEmail: body.contactEmail || null,
+      contactPhone: body.contactPhone || null,
+      notes: body.notes || null,
+      active: body.active !== false,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }
+    await database.collection('providers').insertOne(provider)
+    await audit(database, { actor: user, action: 'PROVIDER_CREATED', entity: 'provider', entityId: provider.id, after: provider })
+    return json({ provider: { ...provider, _id: undefined } })
+  }
+  const providerMatch = path.match(/^\/providers\/([^\/]+)$/)
+  if (providerMatch) {
+    const r = requireRole(user, 'super'); if (r) return r
+    const pid = providerMatch[1]
+    const existing = await database.collection('providers').findOne({ id: pid })
+    if (!existing) return err('Provider not found', 404)
+    if (method === 'PATCH') {
+      const body = await request.json().catch(() => ({}))
+      const updates = {}
+      const allowed = ['name','code','contactEmail','contactPhone','notes','active']
+      for (const k of allowed) if (body[k] !== undefined) updates[k] = body[k]
+      updates.updatedAt = new Date().toISOString()
+      await database.collection('providers').updateOne({ id: pid }, { $set: updates })
+      await audit(database, { actor: user, action: 'PROVIDER_UPDATED', entity: 'provider', entityId: pid, before: existing, after: { ...existing, ...updates } })
+      return json({ ok: true })
+    }
+    if (method === 'DELETE') {
+      await database.collection('providers').updateOne({ id: pid }, { $set: { active: false, updatedAt: new Date().toISOString() } })
+      await audit(database, { actor: user, action: 'PROVIDER_DEACTIVATED', entity: 'provider', entityId: pid, before: existing })
+      return json({ ok: true })
+    }
+  }
+
   return err(`Not found: ${method} ${path}`, 404)
 }
 
