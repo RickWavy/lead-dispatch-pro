@@ -595,10 +595,8 @@ function App() {
 
   const logout = () => { localStorage.clear(); setUser(null) }
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center"><Activity className="w-6 h-6 animate-spin" /></div>
-  if (!user) return <LoginScreen onLogin={setUser} />
-
   const navItems = useMemo(() => {
+    if (!user) return []
     const items = [
       { key: 'dashboard', label: 'Dashboard', icon: Activity },
       { key: 'leads', label: 'Leads', icon: Users },
@@ -607,7 +605,10 @@ function App() {
     if (user.role === 'qa' || user.role === 'super') items.push({ key: 'qa', label: 'QA Queue', icon: ClipboardCheck })
     if (user.role === 'super') items.push({ key: 'audit', label: 'Audit Log', icon: FileText })
     return items
-  }, [user.role])
+  }, [user])
+
+  if (loading) return <div className="min-h-screen flex items-center justify-center"><Activity className="w-6 h-6 animate-spin" /></div>
+  if (!user) return <LoginScreen onLogin={setUser} />
 
   return (
     <div className="min-h-screen bg-slate-50">
