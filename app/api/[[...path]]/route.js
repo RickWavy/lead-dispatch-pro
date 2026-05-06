@@ -231,6 +231,50 @@ async function handler(request, { params }) {
       }
       updates.updatedAt = new Date().toISOString()
       await database.collection('leads').updateOne({ id: leadId }, { $set: updates })
+
+      // Commission auto-generation on Sale (if not already created)
+      if (updates.disposition === 'Sale' && lead.disposition !== 'Sale') {
+        const existingComm = await database.collection('commissions').findOne({ leadId })
+        if (!existingComm) {
+          // Match product by productType (flat amount + per-product split percentages)
+          let totalCommission = 0
+          let splitClosing = 60, splitCreator = 25, splitField = 15
+          let productRef = null
+          if (lead.productType) {
+            const prod = await database.collection('products').findOne({ name: lead.productType, active: true })
+            if (prod) {
+              productRef = { id: prod.id, name: prod.name }
+              totalCommission = Number(prod.commissionAmount) || 0
+              if (prod.splitClosingPct != null) splitClosing = Number(prod.splitClosingPct)
+              if (prod.splitCreatorPct != null) splitCreator = Number(prod.splitCreatorPct)
+              if (prod.splitFieldPct != null) splitField = Number(prod.splitFieldPct)
+            }
+          }
+          // build splits — only include parties that exist
+          const splits = []
+          const closingId = lead.assigneeId || lead.creatorId
+          const closingUser = closingId ? await database.collection('users').findOne({ id: closingId }) : null
+          const creatorUser = (lead.creatorId && lead.creatorId !== closingId) ? await database.collection('users').findOne({ id: lead.creatorId }) : null
+          const isFieldClose = closingUser && closingUser.role === 'field'
+          const round2 = (n) => Math.round(n * 100) / 100
+          if (closingUser) {
+            // if no creator separate, closing absorbs creator share
+            const closingShare = creatorUser ? splitClosing : (splitClosing + splitCreator)
+            splits.push({ role: 'closing', userId: closingUser.id, userName: closingUser.name, percent: closingShare, amount: round2(totalCommission * closingShare / 100) })
+          }
+          if (creatorUser) splits.push({ role: 'creator', userId: creatorUser.id, userName: creatorUser.name, percent: splitCreator, amount: round2(totalCommission * splitCreator / 100) })
+          if (isFieldClose && splitField > 0) splits.push({ role: 'field', userId: closingUser.id, userName: closingUser.name, percent: splitField, amount: round2(totalCommission * splitField / 100) })
+          const commission = {
+            id: uuidv4(), leadId, leadName: `${lead.firstName} ${lead.lastName}`,
+            productType: lead.productType || null, productRef,
+            totalCommission: round2(totalCommission),
+            splits, status: 'Pending Approval', approvedBy: null, approvedAt: null,
+            createdAt: new Date().toISOString(),
+          }
+          await database.collection('commissions').insertOne(commission)
+          await audit(database, { actor: user, action: 'COMMISSION_GENERATED', entity: 'commission', entityId: commission.id, after: commission })
+        }
+      }
       await audit(database, { actor: user, action: 'LEAD_UPDATED', entity: 'lead', entityId: leadId, before: lead, after: { ...lead, ...updates } })
       // notification
       if (updates.disposition) {
@@ -400,6 +444,10 @@ async function handler(request, { params }) {
       providerName: null,
       basePrice: body.basePrice != null ? Number(body.basePrice) : 0,
       commissionPercent: body.commissionPercent != null ? Number(body.commissionPercent) : 0,
+      commissionAmount: body.commissionAmount != null ? Number(body.commissionAmount) : 0,
+      splitClosingPct: body.splitClosingPct != null ? Number(body.splitClosingPct) : 60,
+      splitCreatorPct: body.splitCreatorPct != null ? Number(body.splitCreatorPct) : 25,
+      splitFieldPct: body.splitFieldPct != null ? Number(body.splitFieldPct) : 15,
       active: body.active !== false,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -421,10 +469,14 @@ async function handler(request, { params }) {
     if (method === 'PATCH') {
       const body = await request.json().catch(() => ({}))
       const updates = {}
-      const allowed = ['name','code','description','providerId','basePrice','commissionPercent','active']
+      const allowed = ['name','code','description','providerId','basePrice','commissionPercent','commissionAmount','splitClosingPct','splitCreatorPct','splitFieldPct','active']
       for (const k of allowed) if (body[k] !== undefined) updates[k] = body[k]
       if (updates.basePrice != null) updates.basePrice = Number(updates.basePrice)
       if (updates.commissionPercent != null) updates.commissionPercent = Number(updates.commissionPercent)
+      if (updates.commissionAmount != null) updates.commissionAmount = Number(updates.commissionAmount)
+      if (updates.splitClosingPct != null) updates.splitClosingPct = Number(updates.splitClosingPct)
+      if (updates.splitCreatorPct != null) updates.splitCreatorPct = Number(updates.splitCreatorPct)
+      if (updates.splitFieldPct != null) updates.splitFieldPct = Number(updates.splitFieldPct)
       if (updates.providerId !== undefined) {
         const p = updates.providerId ? await database.collection('providers').findOne({ id: updates.providerId }) : null
         updates.providerName = p?.name || null
@@ -486,6 +538,67 @@ async function handler(request, { params }) {
       await audit(database, { actor: user, action: 'PROVIDER_DEACTIVATED', entity: 'provider', entityId: pid, before: existing })
       return json({ ok: true })
     }
+  }
+
+  // ---------- COMMISSIONS ----------
+  if (method === 'GET' && path === '/commissions') {
+    const all = await database.collection('commissions').find({}).sort({ createdAt: -1 }).limit(500).toArray()
+    let items = all
+    if (user.role === 'agent' || user.role === 'field') {
+      items = all.filter(c => (c.splits || []).some(s => s.userId === user.id))
+              .map(c => ({ ...c, splits: (c.splits || []).filter(s => s.userId === user.id) }))
+    }
+    return json({ commissions: items.map(i => ({ ...i, _id: undefined })) })
+  }
+
+  if (method === 'GET' && path === '/commissions/leaderboard') {
+    const all = await database.collection('commissions').find({ status: 'Approved' }).toArray()
+    const now = new Date()
+    const monthKey = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`
+    const totals = {} // userId -> { name, allTime, month }
+    for (const c of all) {
+      const cMonth = (c.approvedAt || c.createdAt || '').slice(0, 7)
+      for (const s of (c.splits || [])) {
+        if (!s.userId) continue
+        if (!totals[s.userId]) totals[s.userId] = { userId: s.userId, name: s.userName, allTime: 0, month: 0, deals: 0 }
+        totals[s.userId].allTime += Number(s.amount) || 0
+        totals[s.userId].deals += 1
+        if (cMonth === monthKey) totals[s.userId].month += Number(s.amount) || 0
+      }
+    }
+    const board = Object.values(totals).map(t => ({ ...t, allTime: Math.round(t.allTime * 100) / 100, month: Math.round(t.month * 100) / 100 }))
+    board.sort((a, b) => b.allTime - a.allTime)
+    return json({ leaderboard: board, monthKey })
+  }
+
+  const commApproveMatch = path.match(/^\/commissions\/([^\/]+)\/approve$/)
+  if (commApproveMatch && method === 'POST') {
+    const r = requireRole(user, 'super'); if (r) return r
+    const cid = commApproveMatch[1]
+    const c = await database.collection('commissions').findOne({ id: cid })
+    if (!c) return err('Commission not found', 404)
+    if (c.status === 'Approved') return json({ ok: true, message: 'Already approved' })
+    const updates = { status: 'Approved', approvedBy: user.id, approvedByName: user.name, approvedAt: new Date().toISOString() }
+    await database.collection('commissions').updateOne({ id: cid }, { $set: updates })
+    await audit(database, { actor: user, action: 'COMMISSION_APPROVED', entity: 'commission', entityId: cid, before: { status: c.status }, after: updates })
+    for (const s of (c.splits || [])) {
+      if (s.userId) {
+        await database.collection('notifications').insertOne({ id: uuidv4(), type: 'COMMISSION_APPROVED', userId: s.userId, message: `Commission of R${s.amount} approved for lead ${c.leadName}`, createdAt: new Date().toISOString(), read: false })
+      }
+    }
+    return json({ ok: true })
+  }
+
+  const commRejectMatch = path.match(/^\/commissions\/([^\/]+)\/reject$/)
+  if (commRejectMatch && method === 'POST') {
+    const r = requireRole(user, 'super'); if (r) return r
+    const cid = commRejectMatch[1]
+    const c = await database.collection('commissions').findOne({ id: cid })
+    if (!c) return err('Commission not found', 404)
+    const updates = { status: 'Rejected', approvedBy: user.id, approvedByName: user.name, approvedAt: new Date().toISOString() }
+    await database.collection('commissions').updateOne({ id: cid }, { $set: updates })
+    await audit(database, { actor: user, action: 'COMMISSION_REJECTED', entity: 'commission', entityId: cid, before: { status: c.status }, after: updates })
+    return json({ ok: true })
   }
 
   return err(`Not found: ${method} ${path}`, 404)

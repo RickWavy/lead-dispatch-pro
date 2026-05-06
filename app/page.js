@@ -14,7 +14,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Separator } from '@/components/ui/separator'
 import { toast } from 'sonner'
-import { Shield, Users, Phone, ClipboardCheck, Activity, LogOut, Plus, Search, ChevronRight, AlertCircle, CheckCircle2, Clock, MessageSquare, Calendar, FileText, TrendingUp } from 'lucide-react'
+import { Shield, Users, Phone, ClipboardCheck, Activity, LogOut, Plus, Search, ChevronRight, AlertCircle, CheckCircle2, Clock, MessageSquare, Calendar, FileText, TrendingUp, DollarSign, Trophy } from 'lucide-react'
 
 const DISPOSITIONS = ['New','Voicemail','No Answer','Sale','Not Quoted','Not Quoted Callback','Callback Scheduled','Unable To Quote','Nothing To Insure','AI Answered','Wrong Number']
 const SOURCES = ['Internal','Outbound','Referral','Walk-in']
@@ -586,7 +586,7 @@ function ProductsView() {
   const [tab, setTab] = useState('products')
   const [openProd, setOpenProd] = useState(false)
   const [openProv, setOpenProv] = useState(false)
-  const [pf, setPf] = useState({ name: '', code: '', description: '', providerId: '', basePrice: 0, commissionPercent: 0 })
+  const [pf, setPf] = useState({ name: '', code: '', description: '', providerId: '', basePrice: 0, commissionAmount: 0, splitClosingPct: 60, splitCreatorPct: 25, splitFieldPct: 15 })
   const [pvf, setPvf] = useState({ name: '', code: '', contactEmail: '', contactPhone: '', notes: '' })
 
   const load = async () => {
@@ -601,7 +601,7 @@ function ProductsView() {
     if (!pf.name.trim()) { toast.error('Name required'); return }
     try {
       await api('/products', { method: 'POST', body: JSON.stringify({ ...pf, providerId: pf.providerId || null }) })
-      toast.success('Product added'); setOpenProd(false); setPf({ name: '', code: '', description: '', providerId: '', basePrice: 0, commissionPercent: 0 }); load()
+      toast.success('Product added'); setOpenProd(false); setPf({ name: '', code: '', description: '', providerId: '', basePrice: 0, commissionAmount: 0, splitClosingPct: 60, splitCreatorPct: 25, splitFieldPct: 15 }); load()
     } catch (e) { toast.error(e.message) }
   }
   const createProv = async () => {
@@ -638,7 +638,7 @@ function ProductsView() {
           </div>
           <Card>
             <Table>
-              <TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Code</TableHead><TableHead>Provider</TableHead><TableHead>Base Price</TableHead><TableHead>Commission %</TableHead><TableHead>Status</TableHead><TableHead></TableHead></TableRow></TableHeader>
+              <TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Code</TableHead><TableHead>Provider</TableHead><TableHead>Base Price</TableHead><TableHead>Commission</TableHead><TableHead>Split (C/Cr/F)</TableHead><TableHead>Status</TableHead><TableHead></TableHead></TableRow></TableHeader>
               <TableBody>
                 {products.map(p => (
                   <TableRow key={p.id} className={!p.active ? 'opacity-50' : ''}>
@@ -646,12 +646,13 @@ function ProductsView() {
                     <TableCell className="font-mono text-xs">{p.code || '—'}</TableCell>
                     <TableCell className="text-sm">{p.providerName || '—'}</TableCell>
                     <TableCell>R {Number(p.basePrice || 0).toFixed(2)}</TableCell>
-                    <TableCell>{p.commissionPercent || 0}%</TableCell>
+                    <TableCell>R {Number(p.commissionAmount || 0).toFixed(2)}</TableCell>
+                    <TableCell className="text-xs font-mono">{p.splitClosingPct ?? 60}/{p.splitCreatorPct ?? 25}/{p.splitFieldPct ?? 15}</TableCell>
                     <TableCell><Badge variant="outline" className={p.active ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}>{p.active ? 'Active' : 'Inactive'}</Badge></TableCell>
                     <TableCell><Button size="sm" variant="ghost" onClick={() => toggleActive('products', p)}>{p.active ? 'Deactivate' : 'Activate'}</Button></TableCell>
                   </TableRow>
                 ))}
-                {products.length === 0 && <TableRow><TableCell colSpan={7} className="text-center text-sm text-muted-foreground py-12">No products yet. Add your first product.</TableCell></TableRow>}
+                {products.length === 0 && <TableRow><TableCell colSpan={8} className="text-center text-sm text-muted-foreground py-12">No products yet. Add your first product.</TableCell></TableRow>}
               </TableBody>
             </Table>
           </Card>
@@ -703,7 +704,16 @@ function ProductsView() {
             <div><Label>Description</Label><Textarea value={pf.description} onChange={e => setPf({ ...pf, description: e.target.value })} /></div>
             <div className="grid grid-cols-2 gap-3">
               <div><Label>Base Price (R)</Label><Input type="number" value={pf.basePrice} onChange={e => setPf({ ...pf, basePrice: e.target.value })} /></div>
-              <div><Label>Commission %</Label><Input type="number" value={pf.commissionPercent} onChange={e => setPf({ ...pf, commissionPercent: e.target.value })} /></div>
+              <div><Label>Commission Amount (R, flat)</Label><Input type="number" value={pf.commissionAmount} onChange={e => setPf({ ...pf, commissionAmount: e.target.value })} /></div>
+            </div>
+            <div className="space-y-1">
+              <Label>Commission Split (must sum to 100)</Label>
+              <div className="grid grid-cols-3 gap-2">
+                <div><Label className="text-xs text-muted-foreground">Closing %</Label><Input type="number" value={pf.splitClosingPct} onChange={e => setPf({ ...pf, splitClosingPct: e.target.value })} /></div>
+                <div><Label className="text-xs text-muted-foreground">Creator %</Label><Input type="number" value={pf.splitCreatorPct} onChange={e => setPf({ ...pf, splitCreatorPct: e.target.value })} /></div>
+                <div><Label className="text-xs text-muted-foreground">Field %</Label><Input type="number" value={pf.splitFieldPct} onChange={e => setPf({ ...pf, splitFieldPct: e.target.value })} /></div>
+              </div>
+              <p className="text-xs text-muted-foreground">Sum: {Number(pf.splitClosingPct || 0) + Number(pf.splitCreatorPct || 0) + Number(pf.splitFieldPct || 0)}%</p>
             </div>
           </div>
           <DialogFooter>
@@ -735,6 +745,126 @@ function ProductsView() {
   )
 }
 
+function CommissionsView({ user }) {
+  const [commissions, setCommissions] = useState([])
+  const [board, setBoard] = useState([])
+  const [monthKey, setMonthKey] = useState('')
+  const [tab, setTab] = useState(user.role === 'super' ? 'all' : 'mine')
+
+  const load = async () => {
+    try {
+      const c = await api('/commissions'); setCommissions(c.commissions)
+      const b = await api('/commissions/leaderboard'); setBoard(b.leaderboard); setMonthKey(b.monthKey)
+    } catch (e) { toast.error(e.message) }
+  }
+  useEffect(() => { load() }, [])
+
+  const approve = async (id) => { try { await api(`/commissions/${id}/approve`, { method: 'POST' }); toast.success('Approved'); load() } catch (e) { toast.error(e.message) } }
+  const reject = async (id) => { try { await api(`/commissions/${id}/reject`, { method: 'POST' }); toast.success('Rejected'); load() } catch (e) { toast.error(e.message) } }
+
+  // own totals (approved only)
+  const myMonth = board.find(b => b.userId === user.id)?.month || 0
+  const myAll = board.find(b => b.userId === user.id)?.allTime || 0
+  const totalPendingValue = commissions.filter(c => c.status === 'Pending Approval').reduce((s, c) => s + c.totalCommission, 0)
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-2xl font-bold">Commissions</h2>
+        <p className="text-sm text-muted-foreground">{user.role === 'super' ? 'Approve sale commissions and review leaderboard.' : 'Your earned commissions and team leaderboard.'}</p>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        {user.role === 'super' ? (
+          <>
+            <StatCard label="Total Records" value={commissions.length} icon={FileText} />
+            <StatCard label="Pending Value" value={`R ${totalPendingValue.toFixed(2)}`} icon={Clock} color="amber" />
+            <StatCard label="Top Earner (M)" value={board[0]?.name || '—'} icon={Trophy} color="emerald" />
+          </>
+        ) : (
+          <>
+            <StatCard label="This Month" value={`R ${myMonth.toFixed(2)}`} icon={DollarSign} color="emerald" />
+            <StatCard label="All-Time" value={`R ${myAll.toFixed(2)}`} icon={TrendingUp} color="blue" />
+            <StatCard label="My Records" value={commissions.length} icon={FileText} />
+          </>
+        )}
+      </div>
+
+      <Tabs value={tab} onValueChange={setTab}>
+        <TabsList>
+          {user.role === 'super' && <TabsTrigger value="all">All Commissions ({commissions.length})</TabsTrigger>}
+          {user.role !== 'super' && <TabsTrigger value="mine">My Commissions ({commissions.length})</TabsTrigger>}
+          <TabsTrigger value="board">Leaderboard</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value={user.role === 'super' ? 'all' : 'mine'}>
+          <Card>
+            <Table>
+              <TableHeader><TableRow><TableHead>Lead</TableHead><TableHead>Product</TableHead><TableHead>Total</TableHead><TableHead>Splits</TableHead><TableHead>Status</TableHead><TableHead>Created</TableHead>{user.role === 'super' && <TableHead></TableHead>}</TableRow></TableHeader>
+              <TableBody>
+                {commissions.map(c => (
+                  <TableRow key={c.id}>
+                    <TableCell className="font-medium">{c.leadName}</TableCell>
+                    <TableCell className="text-sm">{c.productType || <span className="text-muted-foreground">—</span>}</TableCell>
+                    <TableCell className="font-semibold">R {Number(c.totalCommission || 0).toFixed(2)}</TableCell>
+                    <TableCell>
+                      <div className="space-y-0.5">
+                        {(c.splits || []).map((s, i) => (
+                          <div key={i} className="text-xs flex items-center gap-2">
+                            <Badge variant="outline" className="text-[10px] py-0">{s.role}</Badge>
+                            <span>{s.userName}</span>
+                            <span className="font-mono text-emerald-700">R{Number(s.amount).toFixed(2)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </TableCell>
+                    <TableCell><Badge variant="outline" className={c.status === 'Approved' ? 'bg-emerald-100 text-emerald-700' : c.status === 'Rejected' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}>{c.status}</Badge></TableCell>
+                    <TableCell className="text-xs text-muted-foreground">{new Date(c.createdAt).toLocaleDateString()}</TableCell>
+                    {user.role === 'super' && (
+                      <TableCell>
+                        {c.status === 'Pending Approval' && (
+                          <div className="flex gap-1">
+                            <Button size="sm" className="h-7 bg-emerald-600 hover:bg-emerald-700" onClick={() => approve(c.id)}>Approve</Button>
+                            <Button size="sm" variant="destructive" className="h-7" onClick={() => reject(c.id)}>Reject</Button>
+                          </div>
+                        )}
+                      </TableCell>
+                    )}
+                  </TableRow>
+                ))}
+                {commissions.length === 0 && <TableRow><TableCell colSpan={user.role === 'super' ? 7 : 6} className="text-center text-sm text-muted-foreground py-12">No commissions yet. Sales will auto-generate commission records.</TableCell></TableRow>}
+              </TableBody>
+            </Table>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="board">
+          <Card>
+            <CardHeader><CardTitle className="flex items-center gap-2"><Trophy className="w-5 h-5 text-amber-500" /> Leaderboard <span className="text-xs text-muted-foreground font-normal">({monthKey})</span></CardTitle></CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader><TableRow><TableHead className="w-12">#</TableHead><TableHead>Agent</TableHead><TableHead>This Month</TableHead><TableHead>All-Time</TableHead><TableHead>Approved Deals</TableHead></TableRow></TableHeader>
+                <TableBody>
+                  {board.map((row, idx) => (
+                    <TableRow key={row.userId} className={row.userId === user.id ? 'bg-blue-50' : ''}>
+                      <TableCell className="font-bold text-lg">{idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `#${idx + 1}`}</TableCell>
+                      <TableCell className="font-medium">{row.name}{row.userId === user.id && <span className="ml-2 text-xs text-blue-600">(you)</span>}</TableCell>
+                      <TableCell className="font-semibold text-emerald-700">R {row.month.toFixed(2)}</TableCell>
+                      <TableCell>R {row.allTime.toFixed(2)}</TableCell>
+                      <TableCell className="text-sm">{row.deals}</TableCell>
+                    </TableRow>
+                  ))}
+                  {board.length === 0 && <TableRow><TableCell colSpan={5} className="text-center text-sm text-muted-foreground py-12">No approved commissions yet.</TableCell></TableRow>}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+    </div>
+  )
+}
+
 function App() {
   const [user, setUser] = useState(null)
   const [view, setView] = useState('dashboard')
@@ -758,6 +888,7 @@ function App() {
       { key: 'callbacks', label: 'Callbacks', icon: Phone },
     ]
     if (user.role === 'qa' || user.role === 'super') items.push({ key: 'qa', label: 'QA Queue', icon: ClipboardCheck })
+    if (user.role !== 'qa') items.push({ key: 'commissions', label: 'Commissions', icon: DollarSign })
     if (user.role === 'super') items.push({ key: 'products', label: 'Products', icon: MessageSquare })
     if (user.role === 'super') items.push({ key: 'audit', label: 'Audit Log', icon: FileText })
     return items
@@ -800,6 +931,7 @@ function App() {
         {view === 'leads' && <LeadsView user={user} />}
         {view === 'callbacks' && <CallbacksView user={user} />}
         {view === 'qa' && <QAView user={user} />}
+        {view === 'commissions' && <CommissionsView user={user} />}
         {view === 'products' && <ProductsView />}
         {view === 'audit' && <AuditView />}
       </main>

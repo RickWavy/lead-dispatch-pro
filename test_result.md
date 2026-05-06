@@ -277,7 +277,19 @@ frontend:
     status_history:
         -working: true
         -agent: "main"
-        -comment: "Manually verified: POST /api/providers and POST /api/products work for super; agent POST gets 403; all auth users can GET. Each create writes audit log entry."
+        -comment: "Manually verified: POST /api/providers and POST /api/products work for super; agent POST gets 403; all auth users can GET. Each create writes audit log entry. Extended schema with commissionAmount + per-product split percentages (closing/creator/field)."
+
+  - task: "Backend: Commission Engine"
+    implemented: true
+    working: true
+    file: "/app/app/api/[[...path]]/route.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: true
+        -agent: "main"
+        -comment: "End-to-end smoke tested: Sale disposition auto-creates commission with flat amount + per-product splits. Approval workflow (Pending Approval → Approved). Leaderboard aggregates approved commissions by user (month + all-time). Agent role sees only their own splits. Endpoints: GET /api/commissions, GET /api/commissions/leaderboard, POST /api/commissions/:id/approve, POST /api/commissions/:id/reject."
 
 metadata:
   created_by: "main_agent"
