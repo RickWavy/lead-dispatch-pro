@@ -2,8 +2,8 @@ import './globals.css'
 import { Toaster } from '@/components/ui/sonner'
 
 export const metadata = {
-  title: 'Sentinel CRM — SA Insurance Operations',
-  description: 'Multi-tenant CRM, Call Center, QA & Commission management for South African operations',
+  title: 'UFS — Operations Platform',
+  description: 'CRM, Call Center, QA & Commission management for UFS operations',
 }
 
 export default function RootLayout({ children }) {

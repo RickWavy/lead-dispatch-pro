@@ -21,7 +21,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 const DISPOSITIONS = ['New','Voicemail','No Answer','Sale','Not Quoted','Not Quoted Callback','Callback Scheduled','Unable To Quote','Nothing To Insure','AI Answered','Wrong Number']
 const SOURCES = ['Internal','Outbound','Referral','Walk-in']
 const ROLE_LABEL = { super: 'Super User', agent: 'Call Agent', field: 'Field Agent', qa: 'QA Auditor' }
-const ROLE_COLOR = { super: 'bg-red-100 text-red-700 border-red-200', agent: 'bg-orange-100 text-orange-700 border-orange-200', field: 'bg-yellow-100 text-yellow-700 border-yellow-200', qa: 'bg-blue-100 text-blue-700 border-blue-200' }
+const ROLE_COLOR = { super: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/50', agent: 'bg-amber-500/15 text-amber-300 border-amber-500/40', field: 'bg-orange-500/15 text-orange-300 border-orange-500/40', qa: 'bg-blue-500/15 text-blue-300 border-blue-500/40' }
 const DISP_COLOR = {
   'Sale': 'bg-emerald-100 text-emerald-700 border-emerald-200',
   'Voicemail': 'bg-amber-100 text-amber-700 border-amber-200',
@@ -68,44 +68,44 @@ function LoginScreen({ onLogin }) {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-white to-blue-50 p-4">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-black via-zinc-900 to-black p-4">
       <div className="w-full max-w-md">
-        <div className="flex items-center gap-3 mb-8 justify-center">
-          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-slate-900 to-slate-700 flex items-center justify-center shadow-lg">
-            <Shield className="w-6 h-6 text-white" />
+        <div className="flex flex-col items-center gap-3 mb-8">
+          <div className="w-24 h-24 rounded-2xl bg-black border-2 border-yellow-500/40 flex items-center justify-center shadow-2xl shadow-yellow-500/20 overflow-hidden">
+            <img src="/logo.webp" alt="UFS" className="w-full h-full object-contain" />
           </div>
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">Sentinel CRM</h1>
-            <p className="text-xs text-muted-foreground">SA Insurance Operations</p>
+          <div className="text-center">
+            <h1 className="text-3xl font-bold tracking-tight text-yellow-400">UFS</h1>
+            <p className="text-xs text-zinc-400 uppercase tracking-widest">Operations Platform</p>
           </div>
         </div>
-        <Card className="shadow-xl border-slate-200">
+        <Card className="shadow-2xl border-yellow-500/20 bg-zinc-950 text-zinc-100">
           <CardHeader>
-            <CardTitle>Sign in</CardTitle>
-            <CardDescription>Access the operations platform</CardDescription>
+            <CardTitle className="text-yellow-400">Sign in</CardTitle>
+            <CardDescription className="text-zinc-400">Access the operations platform</CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleLogin} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
-                <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+                <Label htmlFor="email" className="text-zinc-300">Email</Label>
+                <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required className="bg-zinc-900 border-zinc-800 text-zinc-100" />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="password">Password</Label>
-                <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+                <Label htmlFor="password" className="text-zinc-300">Password</Label>
+                <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required className="bg-zinc-900 border-zinc-800 text-zinc-100" />
               </div>
-              <Button type="submit" className="w-full" disabled={loading}>{loading ? 'Signing in...' : 'Sign in'}</Button>
+              <Button type="submit" className="w-full bg-yellow-500 hover:bg-yellow-400 text-black font-semibold" disabled={loading}>{loading ? 'Signing in...' : 'Sign in'}</Button>
             </form>
-            <Separator className="my-6" />
+            <Separator className="my-6 bg-zinc-800" />
             <div className="space-y-3">
-              <p className="text-xs text-muted-foreground">First time? Seed demo users for all 4 roles:</p>
-              <Button variant="outline" className="w-full" onClick={handleSeed}>Seed Demo Users</Button>
+              <p className="text-xs text-zinc-400">First time? Seed demo users for all 4 roles:</p>
+              <Button variant="outline" className="w-full border-yellow-500/40 bg-transparent text-yellow-400 hover:bg-yellow-500/10 hover:text-yellow-300" onClick={handleSeed}>Seed Demo Users</Button>
               {seeded && (
-                <div className="text-xs space-y-1 bg-slate-50 rounded-md p-3 border">
+                <div className="text-xs space-y-1 bg-zinc-900 rounded-md p-3 border border-zinc-800">
                   {seeded.map(s => (
                     <div key={s.email} className="flex justify-between gap-2 font-mono">
-                      <span className="text-slate-600">{s.email}</span>
-                      <span className="text-slate-900">{s.password}</span>
+                      <span className="text-zinc-500">{s.email}</span>
+                      <span className="text-yellow-400">{s.password}</span>
                     </div>
                   ))}
                 </div>
@@ -113,7 +113,7 @@ function LoginScreen({ onLogin }) {
             </div>
           </CardContent>
         </Card>
-        <p className="text-center text-xs text-muted-foreground mt-6">Append-only audit log · Role-based access · SA ID validation</p>
+        <p className="text-center text-xs text-zinc-500 mt-6">Append-only audit log · Role-based access · SA ID validation</p>
       </div>
     </div>
   )
@@ -1261,29 +1261,29 @@ function App() {
   if (!user) return <LoginScreen onLogin={setUser} />
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <header className="bg-white border-b sticky top-0 z-40">
+    <div className="min-h-screen bg-zinc-50">
+      <header className="bg-black border-b-2 border-yellow-500 sticky top-0 z-40">
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-slate-900 to-slate-700 flex items-center justify-center">
-              <Shield className="w-5 h-5 text-white" />
+            <div className="w-10 h-10 rounded-lg bg-black border border-yellow-500/40 flex items-center justify-center overflow-hidden">
+              <img src="/logo.webp" alt="UFS" className="w-full h-full object-contain" />
             </div>
             <div>
-              <h1 className="font-bold tracking-tight">Sentinel CRM</h1>
-              <p className="text-xs text-muted-foreground -mt-0.5">SA Insurance Operations</p>
+              <h1 className="font-bold tracking-tight text-yellow-400 text-lg">UFS</h1>
+              <p className="text-[10px] text-zinc-400 -mt-0.5 uppercase tracking-widest">Operations Platform</p>
             </div>
           </div>
           <div className="flex items-center gap-3">
             <NotificationBell />
-            <Badge variant="outline" className={ROLE_COLOR[user.role]}>{ROLE_LABEL[user.role]}</Badge>
-            <span className="text-sm font-medium hidden sm:inline">{user.name}</span>
-            <Button variant="ghost" size="sm" onClick={logout}><LogOut className="w-4 h-4" /></Button>
+            <Badge variant="outline" className={`${ROLE_COLOR[user.role]} border-yellow-500/40`}>{ROLE_LABEL[user.role]}</Badge>
+            <span className="text-sm font-medium text-zinc-200 hidden sm:inline">{user.name}</span>
+            <Button variant="ghost" size="sm" onClick={logout} className="text-zinc-300 hover:text-yellow-400 hover:bg-zinc-800"><LogOut className="w-4 h-4" /></Button>
           </div>
         </div>
         <div className="container mx-auto px-4">
           <div className="flex gap-1 overflow-x-auto">
             {navItems.map(item => (
-              <button key={item.key} onClick={() => setView(item.key)} className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${view === item.key ? 'border-slate-900 text-slate-900' : 'border-transparent text-muted-foreground hover:text-slate-900'}`}>
+              <button key={item.key} onClick={() => setView(item.key)} className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${view === item.key ? 'border-yellow-500 text-yellow-400' : 'border-transparent text-zinc-400 hover:text-yellow-400'}`}>
                 <item.icon className="w-4 h-4" />{item.label}
               </button>
             ))}
