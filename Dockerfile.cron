@@ -1,0 +1,4 @@
+# Tiny image to ping the cron endpoint on Render Cron
+FROM alpine:3.20
+RUN apk add --no-cache curl
+CMD sh -c 'curl -sS -X POST "$APP_URL/api/cron" -H "x-cron-token: $CRON_TOKEN" -w "\nHTTP %{http_code}\n"'

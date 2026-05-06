@@ -134,6 +134,41 @@ async function handler(request, { params }) {
     return json(validateSaId(body.id))
   }
 
+  if (method === 'POST' && path === '/cron') {
+    const expected = process.env.CRON_TOKEN || 'sentinel-cron'
+    const got = request.headers.get('x-cron-token') || ''
+    if (got !== expected) return err('Forbidden', 403)
+    const now = Date.now()
+    const in24h = new Date(now + 24 * 60 * 60 * 1000).toISOString()
+    const nowIso = new Date(now).toISOString()
+    let reminded = 0, missed = 0
+    const upcoming = await database.collection('fitments').find({ status: 'Scheduled', scheduledAt: { $lte: in24h, $gte: nowIso }, reminded24h: { $ne: true } }).toArray()
+    for (const f of upcoming) {
+      if (f.assigneeId) {
+        await database.collection('notifications').insertOne({ id: uuidv4(), type: 'FITMENT_REMINDER', userId: f.assigneeId, leadId: f.leadId, message: `Reminder: fitment for ${f.leadName} at ${new Date(f.scheduledAt).toLocaleString()}`, createdAt: new Date().toISOString(), read: false })
+      }
+      await database.collection('fitments').updateOne({ id: f.id }, { $set: { reminded24h: true } })
+      reminded++
+    }
+    const overdue = await database.collection('fitments').find({ status: 'Scheduled', scheduledAt: { $lt: nowIso } }).toArray()
+    for (const f of overdue) {
+      await database.collection('fitments').updateOne({ id: f.id }, { $set: { status: 'Missed', updatedAt: nowIso } })
+      if (f.assigneeId) {
+        await database.collection('notifications').insertOne({ id: uuidv4(), type: 'FITMENT_MISSED', userId: f.assigneeId, leadId: f.leadId, message: `Fitment missed: ${f.leadName} (was ${new Date(f.scheduledAt).toLocaleString()})`, createdAt: new Date().toISOString(), read: false })
+      }
+      await audit(database, { actor: { id: 'system', name: 'CronJob', role: 'system' }, action: 'FITMENT_MISSED', entity: 'fitment', entityId: f.id, before: { status: 'Scheduled' }, after: { status: 'Missed' } })
+      missed++
+    }
+    const cbCutoff = new Date(now - 60 * 60 * 1000).toISOString()
+    const overdueCbs = await database.collection('callbacks').find({ scheduledAt: { $lt: cbCutoff }, state: { $in: ['Pending Assignment', 'Assigned', 'Scheduled'] } }).toArray()
+    let cbMissed = 0
+    for (const cb of overdueCbs) {
+      await database.collection('callbacks').updateOne({ id: cb.id }, { $set: { state: 'Missed' } })
+      cbMissed++
+    }
+    return json({ ok: true, reminded, missed, callbacksMissed: cbMissed, ts: nowIso })
+  }
+
   // ---------- auth required from here ----------
   const a = requireAuth(request)
   if (a.error) return a.error
@@ -159,6 +194,15 @@ async function handler(request, { params }) {
         { saId: rx }, { caseNumber: rx }, { accountNumber: rx },
         { vehicleMake: rx }, { vehicleModel: rx },
       ]
+    }
+    const qaStatus = url.searchParams.get('qaStatus')
+    const from = url.searchParams.get('from')
+    const to = url.searchParams.get('to')
+    if (qaStatus) filter.qaStatus = qaStatus === 'none' ? null : qaStatus
+    if (from || to) {
+      filter.createdAt = {}
+      if (from) filter.createdAt.$gte = new Date(from).toISOString()
+      if (to) filter.createdAt.$lte = new Date(to + 'T23:59:59Z').toISOString()
     }
     const leads = await database.collection('leads').find(filter).sort({ createdAt: -1 }).limit(500).toArray()
     return json({ leads: leads.map(l => ({ ...l, _id: undefined })) })
@@ -601,6 +645,7 @@ async function handler(request, { params }) {
     return json({ ok: true })
   }
 
+  if (method === 'POST' && path === '/cron-disabled-duplicate-removed') { return err('removed', 404) }
   // ---------- FITMENTS ----------
   if (method === 'GET' && path === '/fitments') {
     const baseFilter = (user.role === 'agent' || user.role === 'field') ? { assigneeId: user.id } : {}
@@ -677,7 +722,24 @@ async function handler(request, { params }) {
     }
     await database.collection('users').insertOne(newUser)
     await audit(database, { actor: user, action: 'USER_CREATED', entity: 'user', entityId: newUser.id, after: { ...newUser, passwordHash: '[hidden]' } })
-    return json({ user: { id: newUser.id, name: newUser.name, email: newUser.email, role: newUser.role, active: newUser.active } })
+    return json({ user: { id: newUser.id, name: newUser.name, email: newUser.email, role: newUser.role, active: newUser.active }, plaintextPassword: body.password })
+  }
+  const userResetMatch = path.match(/^\/users\/([^\/]+)\/reset-password$/)
+  if (userResetMatch && method === 'POST') {
+    const r = requireRole(user, 'super'); if (r) return r
+    const target = await database.collection('users').findOne({ id: userResetMatch[1] })
+    if (!target) return err('User not found', 404)
+    const body = await request.json().catch(() => ({}))
+    let newPassword = body.password
+    if (!newPassword) {
+      // generate a strong-ish memorable password
+      const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789'
+      newPassword = Array.from({ length: 10 }, () => chars[Math.floor(Math.random() * chars.length)]).join('')
+    }
+    if (String(newPassword).length < 4) return err('Password too short')
+    await database.collection('users').updateOne({ id: target.id }, { $set: { passwordHash: await bcrypt.hash(newPassword, 10) } })
+    await audit(database, { actor: user, action: 'USER_PASSWORD_RESET', entity: 'user', entityId: target.id, meta: { byAdmin: true } })
+    return json({ ok: true, plaintextPassword: newPassword, email: target.email })
   }
   const userMatch = path.match(/^\/users\/([^\/]+)$/)
   if (userMatch && method === 'PATCH') {

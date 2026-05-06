@@ -987,25 +987,35 @@ function UsersView({ currentUser }) {
   const [users, setUsers] = useState([])
   const [open, setOpen] = useState(false)
   const [form, setForm] = useState({ name: '', email: '', password: '', role: 'agent' })
+  const [credModal, setCredModal] = useState(null)
   const load = async () => { try { const r = await api('/users'); setUsers(r.users) } catch (e) { toast.error(e.message) } }
   useEffect(() => { load() }, [])
 
   const create = async () => {
     if (!form.name || !form.email || !form.password) { toast.error('Name, email, password required'); return }
     try {
-      await api('/users', { method: 'POST', body: JSON.stringify(form) })
-      toast.success('User created'); setOpen(false); setForm({ name: '', email: '', password: '', role: 'agent' }); load()
+      const r = await api('/users', { method: 'POST', body: JSON.stringify(form) })
+      toast.success('User created'); setOpen(false)
+      setCredModal({ title: 'User Created', email: r.user.email, password: r.plaintextPassword, role: r.user.role, name: r.user.name })
+      setForm({ name: '', email: '', password: '', role: 'agent' }); load()
     } catch (e) { toast.error(e.message) }
   }
   const toggleActive = async (u) => { try { await api(`/users/${u.id}`, { method: 'PATCH', body: JSON.stringify({ active: !u.active }) }); toast.success('Updated'); load() } catch (e) { toast.error(e.message) } }
   const changeRole = async (u, role) => { try { await api(`/users/${u.id}`, { method: 'PATCH', body: JSON.stringify({ role }) }); toast.success('Role updated'); load() } catch (e) { toast.error(e.message) } }
+  const resetPassword = async (u, custom) => {
+    try {
+      const r = await api(`/users/${u.id}/reset-password`, { method: 'POST', body: JSON.stringify(custom ? { password: custom } : {}) })
+      setCredModal({ title: 'Password Reset', email: r.email, password: r.plaintextPassword, role: u.role, name: u.name })
+      toast.success('Password reset')
+    } catch (e) { toast.error(e.message) }
+  }
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold">User Management</h2>
-          <p className="text-sm text-muted-foreground">Create users, change roles, deactivate accounts.</p>
+          <p className="text-sm text-muted-foreground">Create users, change roles, deactivate accounts. Passwords are revealed once at creation/reset for handover.</p>
         </div>
         <Button onClick={() => setOpen(true)}><Plus className="w-4 h-4 mr-1" /> New User</Button>
       </div>
@@ -1032,7 +1042,12 @@ function UsersView({ currentUser }) {
                 <TableCell><Badge variant="outline" className={u.active ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}>{u.active ? 'Active' : 'Inactive'}</Badge></TableCell>
                 <TableCell className="text-xs text-muted-foreground">{new Date(u.createdAt).toLocaleDateString()}</TableCell>
                 <TableCell>
-                  {u.id !== currentUser.id && <Button size="sm" variant="ghost" onClick={() => toggleActive(u)}>{u.active ? 'Deactivate' : 'Activate'}</Button>}
+                  {u.id !== currentUser.id && (
+                    <div className="flex gap-1">
+                      <Button size="sm" variant="outline" onClick={() => resetPassword(u)}>Reset Password</Button>
+                      <Button size="sm" variant="ghost" onClick={() => toggleActive(u)}>{u.active ? 'Deactivate' : 'Activate'}</Button>
+                    </div>
+                  )}
                 </TableCell>
               </TableRow>
             ))}
@@ -1042,11 +1057,11 @@ function UsersView({ currentUser }) {
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>
-          <DialogHeader><DialogTitle>New User</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>New User</DialogTitle><DialogDescription>The password you set will be shown back for handover.</DialogDescription></DialogHeader>
           <div className="space-y-3">
             <div><Label>Name *</Label><Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} /></div>
             <div><Label>Email *</Label><Input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} /></div>
-            <div><Label>Password *</Label><Input type="password" value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} /></div>
+            <div><Label>Password *</Label><Input type="text" value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} placeholder="Plaintext — will be hashed at rest" /></div>
             <div>
               <Label>Role *</Label>
               <Select value={form.role} onValueChange={v => setForm({ ...form, role: v })}>
@@ -1061,6 +1076,25 @@ function UsersView({ currentUser }) {
             <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
             <Button onClick={create}>Create</Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!credModal} onOpenChange={(v) => !v && setCredModal(null)}>
+        <DialogContent>
+          <DialogHeader><DialogTitle className="flex items-center gap-2"><CheckCircle2 className="w-5 h-5 text-emerald-600" /> {credModal?.title}</DialogTitle><DialogDescription>Copy these credentials now. They will not be shown again.</DialogDescription></DialogHeader>
+          {credModal && (
+            <div className="space-y-3">
+              <div className="bg-slate-50 border rounded-lg p-4 space-y-2 font-mono text-sm">
+                <div className="flex justify-between"><span className="text-muted-foreground">Name:</span><span className="font-semibold">{credModal.name}</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">Email:</span><span className="font-semibold">{credModal.email}</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">Role:</span><Badge variant="outline" className={ROLE_COLOR[credModal.role]}>{ROLE_LABEL[credModal.role]}</Badge></div>
+                <Separator />
+                <div className="flex justify-between items-center"><span className="text-muted-foreground">Password:</span><span className="font-bold text-lg bg-amber-100 px-3 py-1 rounded">{credModal.password}</span></div>
+              </div>
+              <Button className="w-full" variant="outline" onClick={() => { navigator.clipboard.writeText(`${credModal.email} / ${credModal.password}`); toast.success('Copied to clipboard') }}>Copy email + password</Button>
+            </div>
+          )}
+          <DialogFooter><Button onClick={() => setCredModal(null)}>Close</Button></DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

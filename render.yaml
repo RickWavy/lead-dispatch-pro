@@ -1,0 +1,42 @@
+# render.yaml — deploy the Sentinel CRM monorepo to Render
+# Docs: https://render.com/docs/blueprint-spec
+
+services:
+  # 1) Next.js web service (frontend + backend API in one)
+  - type: web
+    name: sentinel-crm
+    env: node
+    plan: starter
+    buildCommand: yarn install --frozen-lockfile && yarn build
+    startCommand: yarn start
+    autoDeploy: true
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: 20
+      - key: MONGO_URL
+        sync: false        # set in dashboard — your MongoDB Atlas connection string
+      - key: DB_NAME
+        value: sentinel_crm
+      - key: JWT_SECRET
+        generateValue: true
+      - key: CRON_TOKEN
+        generateValue: true
+      - key: NEXT_PUBLIC_BASE_URL
+        sync: false        # set after first deploy with the *.onrender.com URL
+
+  # 2) Cron job — runs every 15 minutes to:
+  #    - send 24h-before fitment reminders
+  #    - mark overdue fitments as Missed
+  #    - mark overdue callbacks as Missed
+  - type: cron
+    name: sentinel-cron
+    env: docker
+    schedule: "*/15 * * * *"
+    dockerfilePath: ./Dockerfile.cron
+    autoDeploy: true
+    envVars:
+      - key: APP_URL
+        sync: false        # set to your sentinel-crm.onrender.com URL
+      - key: CRON_TOKEN
+        sync: false        # must match the value on the web service
