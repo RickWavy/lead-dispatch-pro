@@ -14,7 +14,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Separator } from '@/components/ui/separator'
 import { toast } from 'sonner'
-import { Shield, Users, Phone, ClipboardCheck, Activity, LogOut, Plus, Search, ChevronRight, AlertCircle, CheckCircle2, Clock, MessageSquare, Calendar, FileText, TrendingUp, DollarSign, Trophy } from 'lucide-react'
+import { Shield, Users, Phone, ClipboardCheck, Activity, LogOut, Plus, Search, ChevronRight, AlertCircle, CheckCircle2, Clock, MessageSquare, Calendar, FileText, TrendingUp, DollarSign, Trophy, Bell, BarChart3, Wrench, UserCog } from 'lucide-react'
+import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 
 const DISPOSITIONS = ['New','Voicemail','No Answer','Sale','Not Quoted','Not Quoted Callback','Callback Scheduled','Unable To Quote','Nothing To Insure','AI Answered','Wrong Number']
 const SOURCES = ['Internal','Outbound','Referral','Walk-in']
@@ -278,6 +280,10 @@ function LeadDetailDialog({ leadId, open, onOpenChange, user, onChange }) {
     if (!cbDate) { toast.error('Pick a date/time'); return }
     try { await api(`/leads/${leadId}/callback`, { method: 'POST', body: JSON.stringify({ scheduledAt: new Date(cbDate).toISOString(), notes: cbNotes }) }); setCbDate(''); setCbNotes(''); toast.success('Callback scheduled'); load(); onChange?.() } catch (e) { toast.error(e.message) }
   }
+  const scheduleFitment = async () => {
+    if (!cbDate) { toast.error('Pick a fitment date/time'); return }
+    try { await api(`/leads/${leadId}/fitment`, { method: 'POST', body: JSON.stringify({ scheduledAt: new Date(cbDate).toISOString(), notes: cbNotes }) }); setCbDate(''); setCbNotes(''); toast.success('Fitment scheduled'); load(); onChange?.() } catch (e) { toast.error(e.message) }
+  }
   const assignTo = async (userId) => {
     try { await api(`/leads/${leadId}/assign`, { method: 'POST', body: JSON.stringify({ assigneeId: userId }) }); toast.success('Reassigned'); load(); onChange?.() } catch (e) { toast.error(e.message) }
   }
@@ -329,11 +335,14 @@ function LeadDetailDialog({ leadId, open, onOpenChange, user, onChange }) {
             </div>
             <Separator />
             <div className="space-y-2">
-              <Label>Schedule Callback</Label>
+              <Label>Schedule Callback / Fitment</Label>
               <div className="flex gap-2">
                 <Input type="datetime-local" value={cbDate} onChange={e => setCbDate(e.target.value)} className="flex-1" />
                 <Input placeholder="Notes" value={cbNotes} onChange={e => setCbNotes(e.target.value)} className="flex-1" />
-                <Button onClick={scheduleCb}><Calendar className="w-4 h-4 mr-1" /> Schedule</Button>
+              </div>
+              <div className="flex gap-2">
+                <Button size="sm" onClick={scheduleCb}><Calendar className="w-4 h-4 mr-1" /> Callback</Button>
+                <Button size="sm" variant="outline" onClick={scheduleFitment}><Wrench className="w-4 h-4 mr-1" /> Fitment</Button>
               </div>
             </div>
             {user.role === 'super' && (
@@ -865,6 +874,323 @@ function CommissionsView({ user }) {
   )
 }
 
+function NotificationBell() {
+  const [items, setItems] = useState([])
+  const [count, setCount] = useState(0)
+  const [open, setOpen] = useState(false)
+
+  const load = async () => {
+    try {
+      const r = await api('/notifications'); setItems(r.items)
+      const c = await api('/notifications/unread-count'); setCount(c.count)
+    } catch {}
+  }
+  useEffect(() => {
+    load()
+    const t = setInterval(load, 15000)
+    return () => clearInterval(t)
+  }, [])
+
+  const markRead = async (id) => { try { await api(`/notifications/${id}/read`, { method: 'PATCH' }); load() } catch {} }
+  const readAll = async () => { try { await api('/notifications/read-all', { method: 'POST' }); load() } catch {} }
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button variant="ghost" size="icon" className="relative">
+          <Bell className="w-5 h-5" />
+          {count > 0 && <span className="absolute top-1 right-1 w-4 h-4 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center">{count > 9 ? '9+' : count}</span>}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-96 p-0" align="end">
+        <div className="flex items-center justify-between p-3 border-b">
+          <h3 className="font-semibold">Notifications {count > 0 && <span className="text-xs text-muted-foreground">({count} unread)</span>}</h3>
+          {count > 0 && <Button variant="ghost" size="sm" onClick={readAll}>Mark all read</Button>}
+        </div>
+        <ScrollArea className="h-80">
+          {items.length === 0 ? <p className="p-6 text-center text-sm text-muted-foreground">No notifications</p> : (
+            <div>
+              {items.map(n => (
+                <div key={n.id} onClick={() => !n.read && markRead(n.id)} className={`p-3 border-b cursor-pointer hover:bg-slate-50 ${!n.read ? 'bg-blue-50' : ''}`}>
+                  <div className="flex items-start gap-2">
+                    {!n.read && <div className="w-2 h-2 rounded-full bg-blue-500 mt-1.5 flex-shrink-0" />}
+                    <div className="flex-1">
+                      <p className="text-sm">{n.message}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">{new Date(n.createdAt).toLocaleString()}</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </ScrollArea>
+      </PopoverContent>
+    </Popover>
+  )
+}
+
+function FitmentsView({ user }) {
+  const [items, setItems] = useState([])
+  const [detailId, setDetailId] = useState(null)
+  const load = async () => { try { const r = await api('/fitments'); setItems(r.fitments) } catch (e) { toast.error(e.message) } }
+  useEffect(() => { load() }, [])
+
+  const updateStatus = async (id, status) => { try { await api(`/fitments/${id}`, { method: 'PATCH', body: JSON.stringify({ status }) }); toast.success(`Marked ${status}`); load() } catch (e) { toast.error(e.message) } }
+
+  const ageBadge = (f) => {
+    const ms = new Date(f.scheduledAt).getTime() - Date.now()
+    const hrs = ms / (1000 * 60 * 60)
+    if (f.status !== 'Scheduled') return null
+    if (hrs < 0) return <Badge variant="outline" className="bg-red-100 text-red-700">Overdue</Badge>
+    if (hrs < 24) return <Badge variant="outline" className="bg-amber-100 text-amber-700">&lt; 24h</Badge>
+    return <Badge variant="outline" className="bg-blue-100 text-blue-700">{Math.round(hrs / 24)}d</Badge>
+  }
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <h2 className="text-2xl font-bold">Fitments</h2>
+        <p className="text-sm text-muted-foreground">Track scheduled fitments. Get warnings within 24 hours and missed alerts.</p>
+      </div>
+      <Card>
+        <Table>
+          <TableHeader><TableRow><TableHead>Lead</TableHead><TableHead>Phone</TableHead><TableHead>Product</TableHead><TableHead>Scheduled</TableHead><TableHead>Status</TableHead><TableHead>Time</TableHead><TableHead>Actions</TableHead></TableRow></TableHeader>
+          <TableBody>
+            {items.map(f => (
+              <TableRow key={f.id}>
+                <TableCell className="font-medium cursor-pointer" onClick={() => setDetailId(f.leadId)}>{f.leadName}</TableCell>
+                <TableCell className="font-mono text-sm">{f.leadPhone}</TableCell>
+                <TableCell className="text-sm">{f.productType || '—'}</TableCell>
+                <TableCell className="text-sm">{new Date(f.scheduledAt).toLocaleString()}</TableCell>
+                <TableCell><Badge variant="outline" className={f.status === 'Completed' ? 'bg-emerald-100 text-emerald-700' : f.status === 'Missed' ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}>{f.status}</Badge></TableCell>
+                <TableCell>{ageBadge(f)}</TableCell>
+                <TableCell>
+                  {f.status === 'Scheduled' && (
+                    <div className="flex gap-1">
+                      <Button size="sm" className="h-7 bg-emerald-600 hover:bg-emerald-700" onClick={() => updateStatus(f.id, 'Completed')}>Complete</Button>
+                      <Button size="sm" variant="destructive" className="h-7" onClick={() => updateStatus(f.id, 'Missed')}>Miss</Button>
+                    </div>
+                  )}
+                </TableCell>
+              </TableRow>
+            ))}
+            {items.length === 0 && <TableRow><TableCell colSpan={7} className="text-center text-sm text-muted-foreground py-12">No fitments scheduled. Schedule from a lead detail dialog after a sale.</TableCell></TableRow>}
+          </TableBody>
+        </Table>
+      </Card>
+      <LeadDetailDialog leadId={detailId} open={!!detailId} onOpenChange={(v) => !v && setDetailId(null)} user={user} onChange={load} />
+    </div>
+  )
+}
+
+function UsersView({ currentUser }) {
+  const [users, setUsers] = useState([])
+  const [open, setOpen] = useState(false)
+  const [form, setForm] = useState({ name: '', email: '', password: '', role: 'agent' })
+  const load = async () => { try { const r = await api('/users'); setUsers(r.users) } catch (e) { toast.error(e.message) } }
+  useEffect(() => { load() }, [])
+
+  const create = async () => {
+    if (!form.name || !form.email || !form.password) { toast.error('Name, email, password required'); return }
+    try {
+      await api('/users', { method: 'POST', body: JSON.stringify(form) })
+      toast.success('User created'); setOpen(false); setForm({ name: '', email: '', password: '', role: 'agent' }); load()
+    } catch (e) { toast.error(e.message) }
+  }
+  const toggleActive = async (u) => { try { await api(`/users/${u.id}`, { method: 'PATCH', body: JSON.stringify({ active: !u.active }) }); toast.success('Updated'); load() } catch (e) { toast.error(e.message) } }
+  const changeRole = async (u, role) => { try { await api(`/users/${u.id}`, { method: 'PATCH', body: JSON.stringify({ role }) }); toast.success('Role updated'); load() } catch (e) { toast.error(e.message) } }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold">User Management</h2>
+          <p className="text-sm text-muted-foreground">Create users, change roles, deactivate accounts.</p>
+        </div>
+        <Button onClick={() => setOpen(true)}><Plus className="w-4 h-4 mr-1" /> New User</Button>
+      </div>
+      <Card>
+        <Table>
+          <TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Email</TableHead><TableHead>Role</TableHead><TableHead>Status</TableHead><TableHead>Created</TableHead><TableHead></TableHead></TableRow></TableHeader>
+          <TableBody>
+            {users.map(u => (
+              <TableRow key={u.id} className={!u.active ? 'opacity-50' : ''}>
+                <TableCell className="font-medium">{u.name}{u.id === currentUser.id && <span className="ml-2 text-xs text-blue-600">(you)</span>}</TableCell>
+                <TableCell className="font-mono text-sm">{u.email}</TableCell>
+                <TableCell>
+                  {u.id === currentUser.id ? (
+                    <Badge variant="outline" className={ROLE_COLOR[u.role]}>{ROLE_LABEL[u.role]}</Badge>
+                  ) : (
+                    <Select value={u.role} onValueChange={(v) => changeRole(u, v)}>
+                      <SelectTrigger className="w-[140px] h-8"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {Object.keys(ROLE_LABEL).map(r => <SelectItem key={r} value={r}>{ROLE_LABEL[r]}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  )}
+                </TableCell>
+                <TableCell><Badge variant="outline" className={u.active ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}>{u.active ? 'Active' : 'Inactive'}</Badge></TableCell>
+                <TableCell className="text-xs text-muted-foreground">{new Date(u.createdAt).toLocaleDateString()}</TableCell>
+                <TableCell>
+                  {u.id !== currentUser.id && <Button size="sm" variant="ghost" onClick={() => toggleActive(u)}>{u.active ? 'Deactivate' : 'Activate'}</Button>}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </Card>
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>New User</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div><Label>Name *</Label><Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} /></div>
+            <div><Label>Email *</Label><Input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} /></div>
+            <div><Label>Password *</Label><Input type="password" value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} /></div>
+            <div>
+              <Label>Role *</Label>
+              <Select value={form.role} onValueChange={v => setForm({ ...form, role: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {Object.keys(ROLE_LABEL).map(r => <SelectItem key={r} value={r}>{ROLE_LABEL[r]}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
+            <Button onClick={create}>Create</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  )
+}
+
+const PIE_COLORS = ['#10b981', '#f59e0b', '#3b82f6', '#ef4444', '#8b5cf6', '#06b6d4', '#f97316', '#84cc16', '#ec4899', '#64748b']
+
+function AnalyticsView() {
+  const [data, setData] = useState(null)
+  useEffect(() => { api('/analytics').then(setData).catch(e => toast.error(e.message)) }, [])
+  if (!data) return <div className="text-sm text-muted-foreground">Loading analytics...</div>
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-2xl font-bold">Analytics</h2>
+        <p className="text-sm text-muted-foreground">Operational insights across leads, sales, QA and commissions.</p>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard label="Total Leads" value={data.totalLeads} icon={Users} />
+        <StatCard label="Sales" value={data.sales} icon={TrendingUp} color="emerald" />
+        <StatCard label="Conversion" value={`${data.conversionRate}%`} icon={Activity} color="blue" />
+        <StatCard label="Approved Comm." value={`R ${(data.commissions.find(c => c.status === 'Approved')?.total || 0).toFixed(2)}`} icon={DollarSign} color="amber" />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <Card>
+          <CardHeader><CardTitle>Sales — last 30 days</CardTitle></CardHeader>
+          <CardContent>
+            {data.salesByDay.length === 0 ? <p className="text-sm text-muted-foreground py-12 text-center">No sales in the last 30 days.</p> : (
+              <ResponsiveContainer width="100%" height={250}>
+                <LineChart data={data.salesByDay}>
+                  <XAxis dataKey="date" fontSize={11} />
+                  <YAxis fontSize={11} allowDecimals={false} />
+                  <Tooltip />
+                  <Line type="monotone" dataKey="count" stroke="#10b981" strokeWidth={2} dot={{ r: 3 }} />
+                </LineChart>
+              </ResponsiveContainer>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader><CardTitle>Top Agents by Sales</CardTitle></CardHeader>
+          <CardContent>
+            {data.topAgents.length === 0 ? <p className="text-sm text-muted-foreground py-12 text-center">No sales yet.</p> : (
+              <ResponsiveContainer width="100%" height={250}>
+                <BarChart data={data.topAgents} layout="vertical">
+                  <XAxis type="number" fontSize={11} allowDecimals={false} />
+                  <YAxis type="category" dataKey="name" fontSize={11} width={100} />
+                  <Tooltip />
+                  <Bar dataKey="sales" fill="#3b82f6" radius={[0, 4, 4, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader><CardTitle>Disposition Breakdown</CardTitle></CardHeader>
+          <CardContent>
+            {data.dispositions.length === 0 ? <p className="text-sm text-muted-foreground py-12 text-center">No data.</p> : (
+              <ResponsiveContainer width="100%" height={280}>
+                <PieChart>
+                  <Pie data={data.dispositions} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label={(e) => `${e.name}: ${e.value}`}>
+                    {data.dispositions.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
+                  </Pie>
+                  <Tooltip />
+                </PieChart>
+              </ResponsiveContainer>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader><CardTitle>Lead Aging (open leads)</CardTitle></CardHeader>
+          <CardContent>
+            {data.aging.every(b => b.count === 0) ? <p className="text-sm text-muted-foreground py-12 text-center">No open leads.</p> : (
+              <ResponsiveContainer width="100%" height={250}>
+                <BarChart data={data.aging}>
+                  <XAxis dataKey="bucket" fontSize={11} />
+                  <YAxis fontSize={11} allowDecimals={false} />
+                  <Tooltip />
+                  <Bar dataKey="count" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </CardContent>
+        </Card>
+
+        {data.qa.length > 0 && (
+          <Card>
+            <CardHeader><CardTitle>QA Status</CardTitle></CardHeader>
+            <CardContent>
+              <ResponsiveContainer width="100%" height={250}>
+                <PieChart>
+                  <Pie data={data.qa} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label={(e) => `${e.name}: ${e.value}`}>
+                    {data.qa.map((_, i) => <Cell key={i} fill={PIE_COLORS[(i + 2) % PIE_COLORS.length]} />)}
+                  </Pie>
+                  <Tooltip />
+                </PieChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+        )}
+
+        <Card>
+          <CardHeader><CardTitle>Commissions Status</CardTitle></CardHeader>
+          <CardContent>
+            {data.commissions.length === 0 ? <p className="text-sm text-muted-foreground py-12 text-center">No commissions yet.</p> : (
+              <div className="space-y-2">
+                {data.commissions.map(c => (
+                  <div key={c.status} className="flex items-center justify-between p-3 rounded-md bg-slate-50">
+                    <div>
+                      <span className="font-medium">{c.status}</span>
+                      <span className="text-sm text-muted-foreground ml-2">({c.count} record{c.count !== 1 ? 's' : ''})</span>
+                    </div>
+                    <span className="font-mono font-semibold">R {c.total.toFixed(2)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  )
+}
+
 function App() {
   const [user, setUser] = useState(null)
   const [view, setView] = useState('dashboard')
@@ -889,7 +1215,10 @@ function App() {
     ]
     if (user.role === 'qa' || user.role === 'super') items.push({ key: 'qa', label: 'QA Queue', icon: ClipboardCheck })
     if (user.role !== 'qa') items.push({ key: 'commissions', label: 'Commissions', icon: DollarSign })
+    items.push({ key: 'fitments', label: 'Fitments', icon: Wrench })
+    if (user.role === 'super') items.push({ key: 'analytics', label: 'Analytics', icon: BarChart3 })
     if (user.role === 'super') items.push({ key: 'products', label: 'Products', icon: MessageSquare })
+    if (user.role === 'super') items.push({ key: 'users', label: 'Users', icon: UserCog })
     if (user.role === 'super') items.push({ key: 'audit', label: 'Audit Log', icon: FileText })
     return items
   }, [user])
@@ -911,6 +1240,7 @@ function App() {
             </div>
           </div>
           <div className="flex items-center gap-3">
+            <NotificationBell />
             <Badge variant="outline" className={ROLE_COLOR[user.role]}>{ROLE_LABEL[user.role]}</Badge>
             <span className="text-sm font-medium hidden sm:inline">{user.name}</span>
             <Button variant="ghost" size="sm" onClick={logout}><LogOut className="w-4 h-4" /></Button>
@@ -932,7 +1262,10 @@ function App() {
         {view === 'callbacks' && <CallbacksView user={user} />}
         {view === 'qa' && <QAView user={user} />}
         {view === 'commissions' && <CommissionsView user={user} />}
+        {view === 'fitments' && <FitmentsView user={user} />}
+        {view === 'analytics' && <AnalyticsView />}
         {view === 'products' && <ProductsView />}
+        {view === 'users' && <UsersView currentUser={user} />}
         {view === 'audit' && <AuditView />}
       </main>
     </div>

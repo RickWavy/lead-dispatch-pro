@@ -601,6 +601,157 @@ async function handler(request, { params }) {
     return json({ ok: true })
   }
 
+  // ---------- FITMENTS ----------
+  if (method === 'GET' && path === '/fitments') {
+    const baseFilter = (user.role === 'agent' || user.role === 'field') ? { assigneeId: user.id } : {}
+    const items = await database.collection('fitments').find(baseFilter).sort({ scheduledAt: 1 }).limit(500).toArray()
+    return json({ fitments: items.map(i => ({ ...i, _id: undefined })) })
+  }
+  const fitmentScheduleMatch = path.match(/^\/leads\/([^\/]+)\/fitment$/)
+  if (fitmentScheduleMatch && method === 'POST') {
+    const body = await request.json().catch(() => ({}))
+    if (!body.scheduledAt) return err('scheduledAt required (ISO datetime)')
+    const lead = await database.collection('leads').findOne({ id: fitmentScheduleMatch[1] })
+    if (!lead) return err('Lead not found', 404)
+    if ((user.role === 'agent' || user.role === 'field') && lead.assigneeId !== user.id) return err('Forbidden', 403)
+    const fitment = {
+      id: uuidv4(), leadId: lead.id, leadName: `${lead.firstName} ${lead.lastName}`, leadPhone: lead.phone,
+      productType: lead.productType || null, scheduledAt: body.scheduledAt, address: body.address || lead.address || null,
+      notes: body.notes || null, status: 'Scheduled', completedAt: null,
+      assigneeId: lead.assigneeId, assigneeName: lead.assigneeName,
+      creatorId: user.id, creatorName: user.name, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+    }
+    await database.collection('fitments').insertOne(fitment)
+    await audit(database, { actor: user, action: 'FITMENT_SCHEDULED', entity: 'fitment', entityId: fitment.id, after: fitment })
+    if (lead.assigneeId) {
+      await database.collection('notifications').insertOne({ id: uuidv4(), type: 'FITMENT_SCHEDULED', userId: lead.assigneeId, leadId: lead.id, message: `Fitment scheduled for ${fitment.leadName} at ${fitment.scheduledAt}`, createdAt: new Date().toISOString(), read: false })
+    }
+    return json({ fitment })
+  }
+  const fitmentMatch = path.match(/^\/fitments\/([^\/]+)$/)
+  if (fitmentMatch && method === 'PATCH') {
+    const fid = fitmentMatch[1]
+    const body = await request.json().catch(() => ({}))
+    const f = await database.collection('fitments').findOne({ id: fid })
+    if (!f) return err('Fitment not found', 404)
+    if ((user.role === 'agent' || user.role === 'field') && f.assigneeId !== user.id) return err('Forbidden', 403)
+    const allowed = ['scheduledAt','status','notes','address']
+    const updates = {}
+    for (const k of allowed) if (body[k] !== undefined) updates[k] = body[k]
+    if (updates.status === 'Completed') updates.completedAt = new Date().toISOString()
+    updates.updatedAt = new Date().toISOString()
+    await database.collection('fitments').updateOne({ id: fid }, { $set: updates })
+    await audit(database, { actor: user, action: 'FITMENT_UPDATED', entity: 'fitment', entityId: fid, before: f, after: { ...f, ...updates } })
+    return json({ ok: true })
+  }
+
+  // ---------- NOTIFICATIONS extras ----------
+  if (method === 'GET' && path === '/notifications/unread-count') {
+    const filter = { read: false, $or: [{ userId: user.id }, { userId: { $exists: false } }, { userId: null }] }
+    const count = await database.collection('notifications').countDocuments(filter)
+    return json({ count })
+  }
+  const notifReadMatch = path.match(/^\/notifications\/([^\/]+)\/read$/)
+  if (notifReadMatch && method === 'PATCH') {
+    await database.collection('notifications').updateOne({ id: notifReadMatch[1] }, { $set: { read: true, readAt: new Date().toISOString() } })
+    return json({ ok: true })
+  }
+  if (method === 'POST' && path === '/notifications/read-all') {
+    const filter = { read: false, $or: [{ userId: user.id }, { userId: { $exists: false } }, { userId: null }] }
+    await database.collection('notifications').updateMany(filter, { $set: { read: true, readAt: new Date().toISOString() } })
+    return json({ ok: true })
+  }
+
+  // ---------- USERS management (super) ----------
+  if (method === 'POST' && path === '/users') {
+    const r = requireRole(user, 'super'); if (r) return r
+    const body = await request.json().catch(() => ({}))
+    if (!body.email || !body.password || !body.name || !body.role) return err('name, email, password, role are required')
+    if (!ROLES.includes(body.role)) return err('Invalid role')
+    const existing = await database.collection('users').findOne({ email: String(body.email).toLowerCase().trim() })
+    if (existing) return err('Email already in use')
+    const newUser = {
+      id: uuidv4(), name: String(body.name).trim(), email: String(body.email).toLowerCase().trim(),
+      role: body.role, passwordHash: await bcrypt.hash(body.password, 10),
+      active: true, createdAt: new Date().toISOString(),
+    }
+    await database.collection('users').insertOne(newUser)
+    await audit(database, { actor: user, action: 'USER_CREATED', entity: 'user', entityId: newUser.id, after: { ...newUser, passwordHash: '[hidden]' } })
+    return json({ user: { id: newUser.id, name: newUser.name, email: newUser.email, role: newUser.role, active: newUser.active } })
+  }
+  const userMatch = path.match(/^\/users\/([^\/]+)$/)
+  if (userMatch && method === 'PATCH') {
+    const r = requireRole(user, 'super'); if (r) return r
+    const target = await database.collection('users').findOne({ id: userMatch[1] })
+    if (!target) return err('User not found', 404)
+    if (target.id === user.id) return err('Cannot modify your own account', 400)
+    const body = await request.json().catch(() => ({}))
+    const updates = {}
+    if (body.name !== undefined) updates.name = String(body.name).trim()
+    if (body.role !== undefined) {
+      if (!ROLES.includes(body.role)) return err('Invalid role')
+      updates.role = body.role
+    }
+    if (body.active !== undefined) updates.active = !!body.active
+    if (body.password) updates.passwordHash = await bcrypt.hash(body.password, 10)
+    await database.collection('users').updateOne({ id: target.id }, { $set: updates })
+    await audit(database, { actor: user, action: 'USER_UPDATED', entity: 'user', entityId: target.id, before: { role: target.role, active: target.active, name: target.name }, after: updates })
+    return json({ ok: true })
+  }
+
+  // ---------- ANALYTICS (super) ----------
+  if (method === 'GET' && path === '/analytics') {
+    const r = requireRole(user, 'super'); if (r) return r
+    const leads = database.collection('leads')
+    const totalLeads = await leads.countDocuments({})
+    const sales = await leads.countDocuments({ disposition: 'Sale' })
+    // disposition breakdown
+    const dispAgg = await leads.aggregate([{ $group: { _id: '$disposition', count: { $sum: 1 } } }]).toArray()
+    const dispositions = dispAgg.map(a => ({ name: a._id || 'New', value: a.count }))
+    // qa breakdown
+    const qaAgg = await leads.aggregate([{ $match: { qaStatus: { $ne: null } } }, { $group: { _id: '$qaStatus', count: { $sum: 1 } } }]).toArray()
+    const qa = qaAgg.map(a => ({ name: a._id, value: a.count }))
+    // sales by day (last 30 days)
+    const since = new Date(); since.setDate(since.getDate() - 30)
+    const recent = await leads.find({ disposition: 'Sale', updatedAt: { $gte: since.toISOString() } }).toArray()
+    const dayMap = {}
+    for (const l of recent) {
+      const d = (l.updatedAt || l.createdAt).slice(0, 10)
+      dayMap[d] = (dayMap[d] || 0) + 1
+    }
+    const salesByDay = Object.entries(dayMap).map(([date, count]) => ({ date, count })).sort((a, b) => a.date.localeCompare(b.date))
+    // top agents by sales
+    const allUsers = await database.collection('users').find({}).toArray()
+    const userMap = Object.fromEntries(allUsers.map(u => [u.id, u.name]))
+    const salesAgg = await leads.aggregate([
+      { $match: { disposition: 'Sale', assigneeId: { $ne: null } } },
+      { $group: { _id: '$assigneeId', count: { $sum: 1 } } },
+      { $sort: { count: -1 } }, { $limit: 10 },
+    ]).toArray()
+    const topAgents = salesAgg.map(a => ({ name: userMap[a._id] || a._id, sales: a.count }))
+    // lead aging (days since created, bucketed)
+    const allLeads = await leads.find({ disposition: { $nin: ['Sale','Wrong Number','Nothing To Insure'] } }).project({ createdAt: 1 }).toArray()
+    const now = Date.now()
+    const ageBuckets = { '0-1d': 0, '2-7d': 0, '8-30d': 0, '30d+': 0 }
+    for (const l of allLeads) {
+      const days = (now - new Date(l.createdAt).getTime()) / (1000 * 60 * 60 * 24)
+      if (days <= 1) ageBuckets['0-1d']++
+      else if (days <= 7) ageBuckets['2-7d']++
+      else if (days <= 30) ageBuckets['8-30d']++
+      else ageBuckets['30d+']++
+    }
+    const aging = Object.entries(ageBuckets).map(([bucket, count]) => ({ bucket, count }))
+    // commissions
+    const commissionsAgg = await database.collection('commissions').aggregate([
+      { $group: { _id: '$status', count: { $sum: 1 }, total: { $sum: '$totalCommission' } } },
+    ]).toArray()
+    return json({
+      totalLeads, sales, conversionRate: totalLeads ? Math.round((sales / totalLeads) * 1000) / 10 : 0,
+      dispositions, qa, salesByDay, topAgents, aging,
+      commissions: commissionsAgg.map(c => ({ status: c._id, count: c.count, total: Math.round(c.total * 100) / 100 })),
+    })
+  }
+
   return err(`Not found: ${method} ${path}`, 404)
 }
 
