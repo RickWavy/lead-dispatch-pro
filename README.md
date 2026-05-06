@@ -49,6 +49,10 @@ First-run setup:
 | `DB_NAME` | ✅ | Database name (e.g. `sentinel_crm`) |
 | `JWT_SECRET` | ✅ | Strong random string (32+ chars) used to sign auth tokens |
 | `CRON_TOKEN` | ✅ | Secret token required to call `POST /api/cron` (used by Render Cron) |
+| `WHATSAPP_PROVIDER` | optional | `none` (default), `twilio`, or `meta`. Until configured, all outbound WhatsApp messages stay queued and viewable in Help Desk → WhatsApp Queue. |
+| `WHATSAPP_TWILIO_SID` / `WHATSAPP_TWILIO_TOKEN` / `WHATSAPP_TWILIO_FROM` | optional | Twilio creds (when `WHATSAPP_PROVIDER=twilio`) |
+| `WHATSAPP_META_TOKEN` / `WHATSAPP_META_PHONE_ID` | optional | Meta WhatsApp Business creds (when `WHATSAPP_PROVIDER=meta`) |
+| `SUPERVISOR_WHATSAPP` | optional | Phone number (E.164 format, e.g. +27821234567) that receives helpdesk alerts when a ticket is opened |
 | `NEXT_PUBLIC_BASE_URL` | optional | Public URL of the app (auto-detected on Render) |
 
 Generate a secret with: `openssl rand -hex 32`
@@ -119,10 +123,10 @@ Add to crontab (`crontab -e`):
 
 | Role | Email | Password |
 |---|---|---|
-| Super User | `admin@sentinel.co.za` | `admin123` |
-| Call Agent | `agent@sentinel.co.za` | `agent123` |
-| Field Agent | `field@sentinel.co.za` | `field123` |
-| QA Auditor | `qa@sentinel.co.za` | `qa123` |
+| Super User | `admin@ufsbrokers.co.za` | `admin123` |
+| Call Agent | `agent@ufsbrokers.co.za` | `agent123` |
+| Field Agent | `field@ufsbrokers.co.za` | `field123` |
+| QA Auditor | `qa@ufsbrokers.co.za` | `qa123` |
 
 **Rotate these immediately in production.**
 

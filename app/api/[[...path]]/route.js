@@ -99,22 +99,31 @@ async function handler(request, { params }) {
 
   if (method === 'POST' && path === '/auth/seed') {
     const users = database.collection('users')
-    const existing = await users.countDocuments()
-    if (existing > 0) return json({ ok: true, message: 'Already seeded', count: existing })
     const seeds = [
-      { name: 'Sipho Admin', email: 'admin@sentinel.co.za', role: 'super', password: 'admin123' },
-      { name: 'Naledi Agent', email: 'agent@sentinel.co.za', role: 'agent', password: 'agent123' },
-      { name: 'Themba Field', email: 'field@sentinel.co.za', role: 'field', password: 'field123' },
-      { name: 'Lerato QA', email: 'qa@sentinel.co.za', role: 'qa', password: 'qa123' },
+      { name: 'Sipho Admin', email: 'admin@ufsbrokers.co.za', role: 'super', password: 'admin123', oldEmail: 'admin@sentinel.co.za' },
+      { name: 'Naledi Agent', email: 'agent@ufsbrokers.co.za', role: 'agent', password: 'agent123', oldEmail: 'agent@sentinel.co.za' },
+      { name: 'Themba Field', email: 'field@ufsbrokers.co.za', role: 'field', password: 'field123', oldEmail: 'field@sentinel.co.za' },
+      { name: 'Lerato QA', email: 'qa@ufsbrokers.co.za', role: 'qa', password: 'qa123', oldEmail: 'qa@sentinel.co.za' },
     ]
+    let created = 0, migrated = 0
     for (const s of seeds) {
+      // migrate any existing seed user from old domain
+      const oldUser = await users.findOne({ email: s.oldEmail })
+      if (oldUser) {
+        await users.updateOne({ id: oldUser.id }, { $set: { email: s.email, name: s.name, role: s.role, passwordHash: await bcrypt.hash(s.password, 10), active: true } })
+        migrated++
+        continue
+      }
+      const exists = await users.findOne({ email: s.email })
+      if (exists) continue
       await users.insertOne({
         id: uuidv4(), name: s.name, email: s.email, role: s.role,
         passwordHash: await bcrypt.hash(s.password, 10),
         active: true, createdAt: new Date().toISOString(),
       })
+      created++
     }
-    return json({ ok: true, seeded: seeds.map(s => ({ email: s.email, role: s.role, password: s.password })) })
+    return json({ ok: true, created, migrated, seeded: seeds.map(s => ({ email: s.email, role: s.role, password: s.password })) })
   }
 
   if (method === 'POST' && path === '/auth/login') {
@@ -255,7 +264,107 @@ async function handler(request, { params }) {
     return json({ lead: { ...lead, _id: undefined } })
   }
 
-  // /leads/:id
+  // ---------- LEADS IMPORT / EXPORT (must be BEFORE /leads/:id matcher) ----------
+  if (method === 'GET' && path === '/leads/export') {
+    const url = new URL(request.url)
+    const format = (url.searchParams.get('format') || 'csv').toLowerCase()
+    const filter = (user.role === 'agent' || user.role === 'field') ? { assigneeId: user.id } : {}
+    const leads = await database.collection('leads').find(filter).sort({ createdAt: -1 }).toArray()
+    const rows = leads.map(l => ({
+      id: l.id,
+      firstName: l.firstName, lastName: l.lastName, phone: l.phone,
+      saId: l.saId || '', address: l.address || '',
+      vehicleMake: l.vehicleMake || '', vehicleModel: l.vehicleModel || '', vehicleYear: l.vehicleYear || '',
+      caseNumber: l.caseNumber || '', productType: l.productType || '', accountNumber: l.accountNumber || '',
+      debitDate: l.debitDate || '', source: l.source || '',
+      disposition: l.disposition || '', qaStatus: l.qaStatus || '',
+      assigneeName: l.assigneeName || '', creatorName: l.creatorName || '',
+      createdAt: l.createdAt || '', updatedAt: l.updatedAt || '',
+    }))
+    if (format === 'json') {
+      return new NextResponse(JSON.stringify(rows, null, 2), { status: 200, headers: { 'Content-Type': 'application/json', 'Content-Disposition': `attachment; filename="leads-${Date.now()}.json"` } })
+    }
+    if (format === 'xlsx') {
+      const XLSX = await import('xlsx')
+      const ws = XLSX.utils.json_to_sheet(rows)
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, ws, 'Leads')
+      const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' })
+      return new NextResponse(buf, { status: 200, headers: { 'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'Content-Disposition': `attachment; filename="leads-${Date.now()}.xlsx"` } })
+    }
+    const cols = ['id','firstName','lastName','phone','saId','address','vehicleMake','vehicleModel','vehicleYear','caseNumber','productType','accountNumber','debitDate','source','disposition','qaStatus','assigneeName','creatorName','createdAt','updatedAt']
+    const escape = (v) => { const s = String(v ?? ''); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s }
+    const csv = [cols.join(','), ...rows.map(r => cols.map(c => escape(r[c])).join(','))].join('\n')
+    return new NextResponse(csv, { status: 200, headers: { 'Content-Type': 'text/csv', 'Content-Disposition': `attachment; filename="leads-${Date.now()}.csv"` } })
+  }
+
+  if (method === 'POST' && path === '/leads/import') {
+    if (!['super','agent','field'].includes(user.role)) return err('Forbidden', 403)
+    let parsed = []
+    const ctype = request.headers.get('content-type') || ''
+    try {
+      if (ctype.includes('application/json')) {
+        const body = await request.json()
+        parsed = Array.isArray(body) ? body : (body.rows || body.leads || [])
+      } else if (ctype.includes('multipart/form-data')) {
+        const fd = await request.formData()
+        const file = fd.get('file')
+        if (!file) return err('file field required')
+        const ab = await file.arrayBuffer()
+        const buf = Buffer.from(ab)
+        const XLSX = await import('xlsx')
+        const wb = XLSX.read(buf, { type: 'buffer' })
+        const sheetName = wb.SheetNames[0]
+        parsed = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { defval: '' })
+      } else {
+        return err('Send JSON array or multipart file (.csv / .xlsx / .xls / .json)')
+      }
+    } catch (e) {
+      return err(`Parse failed: ${e.message}`)
+    }
+    if (!Array.isArray(parsed)) return err('Could not parse rows')
+    if (parsed.length === 0) return err('No rows found')
+    if (parsed.length > 5000) return err('Max 5000 rows per import')
+
+    const results = { total: parsed.length, created: 0, skipped: 0, errors: [] }
+    for (let i = 0; i < parsed.length; i++) {
+      const r = parsed[i]
+      const firstName = String(r.firstName ?? r['First Name'] ?? r['first_name'] ?? '').trim()
+      const lastName = String(r.lastName ?? r['Last Name'] ?? r['last_name'] ?? '').trim()
+      const phone = String(r.phone ?? r['Phone'] ?? r['Phone Number'] ?? r['phone_number'] ?? '').trim()
+      if (!firstName || !lastName || !phone) { results.skipped++; results.errors.push(`Row ${i + 1}: missing required field(s)`); continue }
+      const saIdRaw = String(r.saId ?? r['SA ID'] ?? r['ID Number'] ?? r['id_number'] ?? '').trim()
+      let saId = null, saIdMeta = null
+      if (saIdRaw) {
+        const v = validateSaId(saIdRaw)
+        if (!v.valid) { results.skipped++; results.errors.push(`Row ${i + 1}: invalid SA ID (${v.reason})`); continue }
+        saId = v.normalized; saIdMeta = { gender: v.gender, citizenship: v.citizenship }
+      }
+      const lead = {
+        id: uuidv4(),
+        firstName, lastName, phone, saId, saIdMeta,
+        address: r.address ?? r['Address'] ?? null,
+        vehicleMake: r.vehicleMake ?? r['Vehicle Make'] ?? null,
+        vehicleModel: r.vehicleModel ?? r['Vehicle Model'] ?? null,
+        vehicleYear: String(r.vehicleYear ?? r['Vehicle Year'] ?? '') || null,
+        caseNumber: r.caseNumber ?? r['Case Number'] ?? null,
+        productType: r.productType ?? r['Product Type'] ?? null,
+        accountNumber: r.accountNumber ?? r['Account Number'] ?? null,
+        debitDate: r.debitDate ?? r['Debit Date'] ?? null,
+        source: r.source ?? r['Source'] ?? 'Internal',
+        disposition: 'New',
+        assigneeId: null, assigneeName: null,
+        creatorId: user.id, creatorName: user.name,
+        qaStatus: null, qaFeedback: null,
+        comments: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+      }
+      try { await database.collection('leads').insertOne(lead); results.created++ } catch (e) { results.skipped++; results.errors.push(`Row ${i + 1}: ${e.message}`) }
+    }
+    await audit(database, { actor: user, action: 'LEADS_IMPORTED', entity: 'leads', entityId: 'bulk', meta: { total: results.total, created: results.created, skipped: results.skipped } })
+    return json(results)
+  }
+
+  // /leads/:id (must come AFTER /leads/export and /leads/import)
   const leadIdMatch = path.match(/^\/leads\/([^\/]+)$/)
   if (leadIdMatch) {
     const leadId = leadIdMatch[1]
@@ -812,6 +921,133 @@ async function handler(request, { params }) {
       dispositions, qa, salesByDay, topAgents, aging,
       commissions: commissionsAgg.map(c => ({ status: c._id, count: c.count, total: Math.round(c.total * 100) / 100 })),
     })
+  }
+
+  // ---------- HELPDESK + WHATSAPP-READY MESSAGING ----------
+  // WhatsApp adapter — provider abstraction; safe to call without keys (always queues)
+  async function sendWhatsApp(database, { to, body, context, severity = 'info' }) {
+    const provider = (process.env.WHATSAPP_PROVIDER || 'none').toLowerCase()
+    const msg = {
+      id: uuidv4(), channel: 'whatsapp', provider, to: String(to || ''), body: String(body || ''),
+      context: context || null, severity, status: 'queued', attempts: 0, lastError: null,
+      sentAt: null, createdAt: new Date().toISOString(),
+    }
+    // Try send if provider configured (placeholders — wired up when keys are added)
+    try {
+      if (provider === 'twilio' && process.env.WHATSAPP_TWILIO_SID) {
+        // Real Twilio call would go here; left as a no-op until keys are provided.
+        msg.status = 'queued'; msg.lastError = 'Twilio adapter not yet wired (waiting for keys)'
+      } else if (provider === 'meta' && process.env.WHATSAPP_META_TOKEN) {
+        msg.status = 'queued'; msg.lastError = 'Meta adapter not yet wired (waiting for keys)'
+      } else {
+        msg.status = 'queued' // 'none' or unconfigured
+      }
+    } catch (e) {
+      msg.status = 'failed'; msg.lastError = String(e?.message || e)
+    }
+    await database.collection('outbound_messages').insertOne(msg)
+    return msg
+  }
+
+  if (method === 'GET' && path === '/helpdesk') {
+    const filter = (user.role === 'super') ? {} : { creatorId: user.id }
+    const items = await database.collection('helpdesk_tickets').find(filter).sort({ createdAt: -1 }).limit(500).toArray()
+    return json({ tickets: items.map(i => ({ ...i, _id: undefined })) })
+  }
+  if (method === 'POST' && path === '/helpdesk') {
+    const body = await request.json().catch(() => ({}))
+    if (!body.subject) return err('subject required')
+    const ticket = {
+      id: uuidv4(),
+      subject: String(body.subject).trim(),
+      description: body.description || null,
+      errorCode: body.errorCode || null,
+      severity: body.severity || 'medium', // low | medium | high | critical
+      leadId: body.leadId || null,
+      screenshot: body.screenshot || null, // data-url string (kept small for MVP)
+      status: 'Open', // Open | In Progress | Resolved
+      creatorId: user.id, creatorName: user.name, creatorRole: user.role,
+      assigneeId: null, assigneeName: null,
+      resolution: null, resolvedAt: null,
+      comments: [],
+      createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+    }
+    await database.collection('helpdesk_tickets').insertOne(ticket)
+    await audit(database, { actor: user, action: 'HELPDESK_TICKET_CREATED', entity: 'helpdesk', entityId: ticket.id, after: ticket })
+    // Notify all super users in-app
+    const supers = await database.collection('users').find({ role: 'super', active: true }).toArray()
+    for (const s of supers) {
+      await database.collection('notifications').insertOne({ id: uuidv4(), type: 'HELPDESK_TICKET', userId: s.id, message: `[${ticket.severity.toUpperCase()}] ${ticket.subject} (by ${user.name})`, createdAt: new Date().toISOString(), read: false })
+    }
+    // Queue WhatsApp message to supervisors (if any phone configured via env)
+    const supTo = process.env.SUPERVISOR_WHATSAPP || ''
+    if (supTo) {
+      await sendWhatsApp(database, { to: supTo, body: `🆘 [${ticket.severity}] ${ticket.subject}\n${ticket.description || ''}\nReporter: ${user.name}`, context: { ticketId: ticket.id }, severity: ticket.severity })
+    }
+    return json({ ticket: { ...ticket, _id: undefined } })
+  }
+  const ticketMatch = path.match(/^\/helpdesk\/([^\/]+)$/)
+  if (ticketMatch && method === 'PATCH') {
+    if (user.role !== 'super') return err('Forbidden', 403)
+    const tid = ticketMatch[1]
+    const t = await database.collection('helpdesk_tickets').findOne({ id: tid })
+    if (!t) return err('Ticket not found', 404)
+    const body = await request.json().catch(() => ({}))
+    const allowed = ['status', 'severity', 'assigneeId', 'resolution']
+    const updates = {}
+    for (const k of allowed) if (body[k] !== undefined) updates[k] = body[k]
+    if (updates.status === 'Resolved' && !t.resolvedAt) updates.resolvedAt = new Date().toISOString()
+    if (updates.assigneeId) {
+      const a = await database.collection('users').findOne({ id: updates.assigneeId })
+      updates.assigneeName = a?.name || null
+    }
+    updates.updatedAt = new Date().toISOString()
+    await database.collection('helpdesk_tickets').updateOne({ id: tid }, { $set: updates })
+    await audit(database, { actor: user, action: 'HELPDESK_TICKET_UPDATED', entity: 'helpdesk', entityId: tid, before: t, after: { ...t, ...updates } })
+    return json({ ok: true })
+  }
+  const ticketCmtMatch = path.match(/^\/helpdesk\/([^\/]+)\/comments$/)
+  if (ticketCmtMatch && method === 'POST') {
+    const body = await request.json().catch(() => ({}))
+    if (!body.text) return err('text required')
+    const t = await database.collection('helpdesk_tickets').findOne({ id: ticketCmtMatch[1] })
+    if (!t) return err('Ticket not found', 404)
+    if (user.role !== 'super' && t.creatorId !== user.id) return err('Forbidden', 403)
+    const comment = { id: uuidv4(), text: body.text, authorId: user.id, authorName: user.name, authorRole: user.role, createdAt: new Date().toISOString() }
+    await database.collection('helpdesk_tickets').updateOne({ id: t.id }, { $push: { comments: comment }, $set: { updatedAt: new Date().toISOString() } })
+    return json({ comment })
+  }
+
+  // ---------- WhatsApp Settings & Queue (super only) ----------
+  if (method === 'GET' && path === '/settings/whatsapp') {
+    const r = requireRole(user, 'super'); if (r) return r
+    const provider = process.env.WHATSAPP_PROVIDER || 'none'
+    const configured = (provider === 'twilio' && !!process.env.WHATSAPP_TWILIO_SID) || (provider === 'meta' && !!process.env.WHATSAPP_META_TOKEN)
+    const supervisorTo = process.env.SUPERVISOR_WHATSAPP || ''
+    const queued = await database.collection('outbound_messages').countDocuments({ status: 'queued' })
+    const sent = await database.collection('outbound_messages').countDocuments({ status: 'sent' })
+    const failed = await database.collection('outbound_messages').countDocuments({ status: 'failed' })
+    return json({ provider, configured, supervisorTo, counts: { queued, sent, failed } })
+  }
+  if (method === 'GET' && path === '/messages') {
+    const r = requireRole(user, 'super'); if (r) return r
+    const items = await database.collection('outbound_messages').find({}).sort({ createdAt: -1 }).limit(200).toArray()
+    return json({ messages: items.map(i => ({ ...i, _id: undefined })) })
+  }
+  const msgRetryMatch = path.match(/^\/messages\/([^\/]+)\/retry$/)
+  if (msgRetryMatch && method === 'POST') {
+    const r = requireRole(user, 'super'); if (r) return r
+    const m = await database.collection('outbound_messages').findOne({ id: msgRetryMatch[1] })
+    if (!m) return err('Message not found', 404)
+    await database.collection('outbound_messages').updateOne({ id: m.id }, { $set: { status: 'queued', attempts: (m.attempts || 0) + 1, lastError: null } })
+    return json({ ok: true })
+  }
+  if (method === 'POST' && path === '/messages/test') {
+    const r = requireRole(user, 'super'); if (r) return r
+    const body = await request.json().catch(() => ({}))
+    if (!body.to) return err('to required')
+    const m = await sendWhatsApp(database, { to: body.to, body: body.body || 'Test message from UFS Operations Platform', context: { kind: 'test' }, severity: 'info' })
+    return json({ message: m })
   }
 
   return err(`Not found: ${method} ${path}`, 404)

@@ -14,7 +14,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Separator } from '@/components/ui/separator'
 import { toast } from 'sonner'
-import { Shield, Users, Phone, ClipboardCheck, Activity, LogOut, Plus, Search, ChevronRight, AlertCircle, CheckCircle2, Clock, MessageSquare, Calendar, FileText, TrendingUp, DollarSign, Trophy, Bell, BarChart3, Wrench, UserCog } from 'lucide-react'
+import { Shield, Users, Phone, ClipboardCheck, Activity, LogOut, Plus, Search, ChevronRight, AlertCircle, CheckCircle2, Clock, MessageSquare, Calendar, FileText, TrendingUp, DollarSign, Trophy, Bell, BarChart3, Wrench, UserCog, LifeBuoy, Upload, Download, Send } from 'lucide-react'
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 
@@ -68,43 +68,43 @@ function LoginScreen({ onLogin }) {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-black via-zinc-900 to-black p-4">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-zinc-900 via-zinc-800 to-amber-950/40 p-4">
       <div className="w-full max-w-md">
         <div className="flex flex-col items-center gap-3 mb-8">
-          <div className="w-24 h-24 rounded-2xl bg-black border-2 border-yellow-500/40 flex items-center justify-center shadow-2xl shadow-yellow-500/20 overflow-hidden">
+          <div className="w-24 h-24 rounded-2xl bg-zinc-950 border-2 border-yellow-500/50 flex items-center justify-center shadow-2xl shadow-yellow-500/30 overflow-hidden">
             <img src="/logo.webp" alt="UFS" className="w-full h-full object-contain" />
           </div>
           <div className="text-center">
             <h1 className="text-3xl font-bold tracking-tight text-yellow-400">UFS</h1>
-            <p className="text-xs text-zinc-400 uppercase tracking-widest">Operations Platform</p>
+            <p className="text-xs text-zinc-300 uppercase tracking-widest">Operations Platform</p>
           </div>
         </div>
-        <Card className="shadow-2xl border-yellow-500/20 bg-zinc-950 text-zinc-100">
+        <Card className="shadow-2xl border-yellow-500/30 bg-zinc-900/80 backdrop-blur text-zinc-100">
           <CardHeader>
             <CardTitle className="text-yellow-400">Sign in</CardTitle>
-            <CardDescription className="text-zinc-400">Access the operations platform</CardDescription>
+            <CardDescription className="text-zinc-300">Access the operations platform</CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleLogin} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="email" className="text-zinc-300">Email</Label>
-                <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required className="bg-zinc-900 border-zinc-800 text-zinc-100" />
+                <Label htmlFor="email" className="text-zinc-200">Email</Label>
+                <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required className="bg-zinc-800 border-zinc-700 text-zinc-100" />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="password" className="text-zinc-300">Password</Label>
-                <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required className="bg-zinc-900 border-zinc-800 text-zinc-100" />
+                <Label htmlFor="password" className="text-zinc-200">Password</Label>
+                <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required className="bg-zinc-800 border-zinc-700 text-zinc-100" />
               </div>
               <Button type="submit" className="w-full bg-yellow-500 hover:bg-yellow-400 text-black font-semibold" disabled={loading}>{loading ? 'Signing in...' : 'Sign in'}</Button>
             </form>
-            <Separator className="my-6 bg-zinc-800" />
+            <Separator className="my-6 bg-zinc-700" />
             <div className="space-y-3">
-              <p className="text-xs text-zinc-400">First time? Seed demo users for all 4 roles:</p>
-              <Button variant="outline" className="w-full border-yellow-500/40 bg-transparent text-yellow-400 hover:bg-yellow-500/10 hover:text-yellow-300" onClick={handleSeed}>Seed Demo Users</Button>
+              <p className="text-xs text-zinc-300">First time? Seed demo users for all 4 roles:</p>
+              <Button variant="outline" className="w-full border-yellow-500/50 bg-transparent text-yellow-400 hover:bg-yellow-500/15 hover:text-yellow-300" onClick={handleSeed}>Seed Demo Users</Button>
               {seeded && (
-                <div className="text-xs space-y-1 bg-zinc-900 rounded-md p-3 border border-zinc-800">
+                <div className="text-xs space-y-1 bg-zinc-800/80 rounded-md p-3 border border-zinc-700">
                   {seeded.map(s => (
                     <div key={s.email} className="flex justify-between gap-2 font-mono">
-                      <span className="text-zinc-500">{s.email}</span>
+                      <span className="text-zinc-400">{s.email}</span>
                       <span className="text-yellow-400">{s.password}</span>
                     </div>
                   ))}
@@ -113,23 +113,29 @@ function LoginScreen({ onLogin }) {
             </div>
           </CardContent>
         </Card>
-        <p className="text-center text-xs text-zinc-500 mt-6">Append-only audit log · Role-based access · SA ID validation</p>
+        <p className="text-center text-xs text-zinc-400 mt-6">Append-only audit log · Role-based access · SA ID validation</p>
       </div>
     </div>
   )
 }
 
 function StatCard({ label, value, icon: Icon, color = 'slate' }) {
+  const colorMap = {
+    slate: 'bg-yellow-100 text-yellow-700',
+    emerald: 'bg-emerald-100 text-emerald-700',
+    blue: 'bg-blue-100 text-blue-700',
+    amber: 'bg-amber-100 text-amber-700',
+  }
   return (
-    <Card>
+    <Card className="border-yellow-200/60 bg-white">
       <CardContent className="pt-6">
         <div className="flex items-center justify-between">
           <div>
             <p className="text-sm text-muted-foreground">{label}</p>
             <p className="text-3xl font-bold mt-1">{value}</p>
           </div>
-          <div className={`w-12 h-12 rounded-lg bg-${color}-100 flex items-center justify-center`}>
-            <Icon className={`w-6 h-6 text-${color}-600`} />
+          <div className={`w-12 h-12 rounded-lg ${colorMap[color] || colorMap.slate} flex items-center justify-center`}>
+            <Icon className="w-6 h-6" />
           </div>
         </div>
       </CardContent>
@@ -425,6 +431,7 @@ function LeadsView({ user }) {
   const [disposition, setDisposition] = useState('all')
   const [openCreate, setOpenCreate] = useState(false)
   const [detailId, setDetailId] = useState(null)
+  const [openImport, setOpenImport] = useState(false)
 
   const load = useCallback(async () => {
     const params = new URLSearchParams()
@@ -435,11 +442,37 @@ function LeadsView({ user }) {
 
   useEffect(() => { load() }, [load])
 
+  const exportLeads = async (format) => {
+    try {
+      const token = localStorage.getItem('crm_token')
+      const res = await fetch(`/api/leads/export?format=${format}`, { headers: { Authorization: `Bearer ${token}` } })
+      if (!res.ok) throw new Error('Export failed')
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url; a.download = `leads-${Date.now()}.${format}`
+      document.body.appendChild(a); a.click(); a.remove()
+      URL.revokeObjectURL(url)
+      toast.success(`Exported as ${format.toUpperCase()}`)
+    } catch (e) { toast.error(e.message) }
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <h2 className="text-2xl font-bold">Leads</h2>
-        <Button onClick={() => setOpenCreate(true)}><Plus className="w-4 h-4 mr-1" /> New Lead</Button>
+        <div className="flex gap-2 flex-wrap">
+          <Button variant="outline" onClick={() => setOpenImport(true)}><Upload className="w-4 h-4 mr-1" /> Import</Button>
+          <Select onValueChange={exportLeads}>
+            <SelectTrigger className="w-[140px]"><Download className="w-4 h-4 mr-1" /><SelectValue placeholder="Export" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="csv">CSV</SelectItem>
+              <SelectItem value="xlsx">Excel (.xlsx)</SelectItem>
+              <SelectItem value="json">JSON</SelectItem>
+            </SelectContent>
+          </Select>
+          <Button onClick={() => setOpenCreate(true)} className="bg-yellow-500 hover:bg-yellow-400 text-black"><Plus className="w-4 h-4 mr-1" /> New Lead</Button>
+        </div>
       </div>
       <div className="flex gap-2 flex-wrap">
         <div className="relative flex-1 min-w-[200px]">
@@ -479,6 +512,204 @@ function LeadsView({ user }) {
       </Card>
       <LeadCreateDialog open={openCreate} onOpenChange={setOpenCreate} onCreated={load} />
       <LeadDetailDialog leadId={detailId} open={!!detailId} onOpenChange={(v) => !v && setDetailId(null)} user={user} onChange={load} />
+      <ImportLeadsDialog open={openImport} onOpenChange={setOpenImport} onImported={load} />
+    </div>
+  )
+}
+
+function ImportLeadsDialog({ open, onOpenChange, onImported }) {
+  const [file, setFile] = useState(null)
+  const [result, setResult] = useState(null)
+  const [busy, setBusy] = useState(false)
+
+  const submit = async () => {
+    if (!file) { toast.error('Select a file'); return }
+    setBusy(true); setResult(null)
+    try {
+      const fd = new FormData(); fd.append('file', file)
+      const token = localStorage.getItem('crm_token')
+      const res = await fetch('/api/leads/import', { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: fd })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Import failed')
+      setResult(data)
+      toast.success(`Imported ${data.created} of ${data.total}`)
+      onImported?.()
+    } catch (e) { toast.error(e.message) } finally { setBusy(false) }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => { if (!v) { setFile(null); setResult(null) } onOpenChange(v) }}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Import Leads</DialogTitle>
+          <DialogDescription>Upload .csv, .xlsx, .xls or .json. Required columns: <code>firstName</code>, <code>lastName</code>, <code>phone</code>. Optional: saId, address, vehicleMake, vehicleModel, vehicleYear, caseNumber, productType, accountNumber, debitDate, source.</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3">
+          <Input type="file" accept=".csv,.xlsx,.xls,.json" onChange={e => setFile(e.target.files?.[0] || null)} />
+          {file && <p className="text-sm text-muted-foreground">Selected: <strong>{file.name}</strong> ({Math.round(file.size / 1024)} KB)</p>}
+          {result && (
+            <div className="bg-slate-50 border rounded-md p-3 text-sm space-y-1">
+              <p>Total rows: <strong>{result.total}</strong></p>
+              <p className="text-emerald-700">Created: <strong>{result.created}</strong></p>
+              <p className="text-amber-700">Skipped: <strong>{result.skipped}</strong></p>
+              {result.errors?.length > 0 && (
+                <details className="text-xs text-red-700"><summary className="cursor-pointer">{result.errors.length} error(s)</summary><ul className="mt-1 space-y-0.5">{result.errors.slice(0, 20).map((e, i) => <li key={i}>{e}</li>)}</ul></details>
+              )}
+            </div>
+          )}
+          <div className="text-xs bg-yellow-50 border border-yellow-200 rounded p-2">
+            <strong>Tip:</strong> Export an existing leads file first (CSV/XLSX) to see the exact column headers expected.
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
+          <Button onClick={submit} disabled={busy || !file}>{busy ? 'Importing...' : 'Import'}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function HelpDeskView({ user }) {
+  const [tickets, setTickets] = useState([])
+  const [waSettings, setWaSettings] = useState(null)
+  const [messages, setMessages] = useState([])
+  const [openCreate, setOpenCreate] = useState(false)
+  const [form, setForm] = useState({ subject: '', description: '', severity: 'medium' })
+  const [tab, setTab] = useState('tickets')
+
+  const load = async () => {
+    try {
+      const t = await api('/helpdesk'); setTickets(t.tickets)
+      if (user.role === 'super') {
+        const s = await api('/settings/whatsapp'); setWaSettings(s)
+        const m = await api('/messages'); setMessages(m.messages)
+      }
+    } catch (e) { toast.error(e.message) }
+  }
+  useEffect(() => { load() }, [])
+
+  const create = async () => {
+    if (!form.subject.trim()) { toast.error('Subject required'); return }
+    try { await api('/helpdesk', { method: 'POST', body: JSON.stringify(form) }); toast.success('Ticket created'); setOpenCreate(false); setForm({ subject: '', description: '', severity: 'medium' }); load() } catch (e) { toast.error(e.message) }
+  }
+  const updateTicket = async (id, updates) => { try { await api(`/helpdesk/${id}`, { method: 'PATCH', body: JSON.stringify(updates) }); toast.success('Updated'); load() } catch (e) { toast.error(e.message) } }
+  const retryMsg = async (id) => { try { await api(`/messages/${id}/retry`, { method: 'POST' }); toast.success('Re-queued'); load() } catch (e) { toast.error(e.message) } }
+
+  const sevColor = (s) => ({ low: 'bg-slate-100 text-slate-700', medium: 'bg-blue-100 text-blue-700', high: 'bg-amber-100 text-amber-700', critical: 'bg-red-100 text-red-700' }[s] || 'bg-slate-100')
+  const stColor = (s) => ({ Open: 'bg-amber-100 text-amber-700', 'In Progress': 'bg-blue-100 text-blue-700', Resolved: 'bg-emerald-100 text-emerald-700' }[s] || 'bg-slate-100')
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div>
+          <h2 className="text-2xl font-bold">Help Desk</h2>
+          <p className="text-sm text-muted-foreground">Report system errors. {user.role === 'super' && 'Manage tickets and the WhatsApp outbound queue.'}</p>
+        </div>
+        <Button onClick={() => setOpenCreate(true)} className="bg-yellow-500 hover:bg-yellow-400 text-black"><Plus className="w-4 h-4 mr-1" /> New Ticket</Button>
+      </div>
+
+      <Tabs value={tab} onValueChange={setTab}>
+        <TabsList>
+          <TabsTrigger value="tickets">Tickets ({tickets.length})</TabsTrigger>
+          {user.role === 'super' && <TabsTrigger value="whatsapp">WhatsApp Queue ({messages.length})</TabsTrigger>}
+        </TabsList>
+
+        <TabsContent value="tickets">
+          <Card>
+            <Table>
+              <TableHeader><TableRow><TableHead>Subject</TableHead><TableHead>Severity</TableHead><TableHead>Status</TableHead><TableHead>Reporter</TableHead><TableHead>Created</TableHead>{user.role === 'super' && <TableHead>Actions</TableHead>}</TableRow></TableHeader>
+              <TableBody>
+                {tickets.map(t => (
+                  <TableRow key={t.id}>
+                    <TableCell className="font-medium">{t.subject}</TableCell>
+                    <TableCell><Badge variant="outline" className={sevColor(t.severity)}>{t.severity}</Badge></TableCell>
+                    <TableCell><Badge variant="outline" className={stColor(t.status)}>{t.status}</Badge></TableCell>
+                    <TableCell className="text-sm">{t.creatorName} <span className="text-muted-foreground text-xs">({t.creatorRole})</span></TableCell>
+                    <TableCell className="text-xs text-muted-foreground">{new Date(t.createdAt).toLocaleString()}</TableCell>
+                    {user.role === 'super' && (
+                      <TableCell>
+                        <Select value={t.status} onValueChange={(v) => updateTicket(t.id, { status: v })}>
+                          <SelectTrigger className="w-[140px] h-8"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Open">Open</SelectItem>
+                            <SelectItem value="In Progress">In Progress</SelectItem>
+                            <SelectItem value="Resolved">Resolved</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </TableCell>
+                    )}
+                  </TableRow>
+                ))}
+                {tickets.length === 0 && <TableRow><TableCell colSpan={user.role === 'super' ? 6 : 5} className="text-center text-sm text-muted-foreground py-12">No tickets yet.</TableCell></TableRow>}
+              </TableBody>
+            </Table>
+          </Card>
+        </TabsContent>
+
+        {user.role === 'super' && (
+          <TabsContent value="whatsapp" className="space-y-4">
+            {waSettings && (
+              <Card>
+                <CardHeader><CardTitle className="text-base">WhatsApp Provider</CardTitle></CardHeader>
+                <CardContent className="space-y-2 text-sm">
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline" className={waSettings.configured ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}>
+                      {waSettings.configured ? `Configured (${waSettings.provider})` : `Not configured (${waSettings.provider})`}
+                    </Badge>
+                  </div>
+                  <p className="text-xs text-muted-foreground">Configure via env: <code>WHATSAPP_PROVIDER</code> = <code>twilio</code> or <code>meta</code>, plus provider keys, plus <code>SUPERVISOR_WHATSAPP</code> for the supervisor recipient. Until configured, all messages stay queued.</p>
+                  <p className="text-xs">Queued: <strong>{waSettings.counts.queued}</strong> · Sent: <strong className="text-emerald-700">{waSettings.counts.sent}</strong> · Failed: <strong className="text-red-700">{waSettings.counts.failed}</strong></p>
+                </CardContent>
+              </Card>
+            )}
+            <Card>
+              <Table>
+                <TableHeader><TableRow><TableHead>To</TableHead><TableHead>Body</TableHead><TableHead>Status</TableHead><TableHead>Attempts</TableHead><TableHead>Created</TableHead><TableHead></TableHead></TableRow></TableHeader>
+                <TableBody>
+                  {messages.map(m => (
+                    <TableRow key={m.id}>
+                      <TableCell className="font-mono text-xs">{m.to}</TableCell>
+                      <TableCell className="text-xs max-w-md truncate">{m.body}</TableCell>
+                      <TableCell><Badge variant="outline" className={m.status === 'sent' ? 'bg-emerald-100 text-emerald-700' : m.status === 'failed' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}>{m.status}</Badge></TableCell>
+                      <TableCell className="text-xs">{m.attempts}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">{new Date(m.createdAt).toLocaleString()}</TableCell>
+                      <TableCell>{m.status !== 'sent' && <Button size="sm" variant="ghost" onClick={() => retryMsg(m.id)}><Send className="w-3 h-3" /></Button>}</TableCell>
+                    </TableRow>
+                  ))}
+                  {messages.length === 0 && <TableRow><TableCell colSpan={6} className="text-center text-sm text-muted-foreground py-12">Outbound queue empty.</TableCell></TableRow>}
+                </TableBody>
+              </Table>
+            </Card>
+          </TabsContent>
+        )}
+      </Tabs>
+
+      <Dialog open={openCreate} onOpenChange={setOpenCreate}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Report an Issue</DialogTitle><DialogDescription>This notifies all super users in-app and (when configured) via WhatsApp.</DialogDescription></DialogHeader>
+          <div className="space-y-3">
+            <div><Label>Subject *</Label><Input value={form.subject} onChange={e => setForm({ ...form, subject: e.target.value })} /></div>
+            <div><Label>Description</Label><Textarea rows={4} value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} placeholder="What happened? Steps to reproduce, error code, etc." /></div>
+            <div>
+              <Label>Severity</Label>
+              <Select value={form.severity} onValueChange={v => setForm({ ...form, severity: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="low">Low</SelectItem>
+                  <SelectItem value="medium">Medium</SelectItem>
+                  <SelectItem value="high">High</SelectItem>
+                  <SelectItem value="critical">Critical</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setOpenCreate(false)}>Cancel</Button>
+            <Button onClick={create}>Submit Ticket</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
@@ -1253,6 +1484,7 @@ function App() {
     if (user.role === 'super') items.push({ key: 'analytics', label: 'Analytics', icon: BarChart3 })
     if (user.role === 'super') items.push({ key: 'products', label: 'Products', icon: MessageSquare })
     if (user.role === 'super') items.push({ key: 'users', label: 'Users', icon: UserCog })
+    items.push({ key: 'helpdesk', label: 'Help Desk', icon: LifeBuoy })
     if (user.role === 'super') items.push({ key: 'audit', label: 'Audit Log', icon: FileText })
     return items
   }, [user])
@@ -1261,29 +1493,29 @@ function App() {
   if (!user) return <LoginScreen onLogin={setUser} />
 
   return (
-    <div className="min-h-screen bg-zinc-50">
-      <header className="bg-black border-b-2 border-yellow-500 sticky top-0 z-40">
+    <div className="min-h-screen bg-amber-50/40">
+      <header className="bg-gradient-to-r from-zinc-900 via-zinc-800 to-zinc-900 border-b-2 border-yellow-500 sticky top-0 z-40 shadow-lg">
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-black border border-yellow-500/40 flex items-center justify-center overflow-hidden">
+            <div className="w-10 h-10 rounded-lg bg-zinc-950 border border-yellow-500/50 flex items-center justify-center overflow-hidden">
               <img src="/logo.webp" alt="UFS" className="w-full h-full object-contain" />
             </div>
             <div>
               <h1 className="font-bold tracking-tight text-yellow-400 text-lg">UFS</h1>
-              <p className="text-[10px] text-zinc-400 -mt-0.5 uppercase tracking-widest">Operations Platform</p>
+              <p className="text-[10px] text-zinc-300 -mt-0.5 uppercase tracking-widest">Operations Platform</p>
             </div>
           </div>
           <div className="flex items-center gap-3">
             <NotificationBell />
-            <Badge variant="outline" className={`${ROLE_COLOR[user.role]} border-yellow-500/40`}>{ROLE_LABEL[user.role]}</Badge>
-            <span className="text-sm font-medium text-zinc-200 hidden sm:inline">{user.name}</span>
-            <Button variant="ghost" size="sm" onClick={logout} className="text-zinc-300 hover:text-yellow-400 hover:bg-zinc-800"><LogOut className="w-4 h-4" /></Button>
+            <Badge variant="outline" className={`${ROLE_COLOR[user.role]} border`}>{ROLE_LABEL[user.role]}</Badge>
+            <span className="text-sm font-medium text-zinc-100 hidden sm:inline">{user.name}</span>
+            <Button variant="ghost" size="sm" onClick={logout} className="text-zinc-200 hover:text-yellow-400 hover:bg-zinc-800"><LogOut className="w-4 h-4" /></Button>
           </div>
         </div>
         <div className="container mx-auto px-4">
           <div className="flex gap-1 overflow-x-auto">
             {navItems.map(item => (
-              <button key={item.key} onClick={() => setView(item.key)} className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${view === item.key ? 'border-yellow-500 text-yellow-400' : 'border-transparent text-zinc-400 hover:text-yellow-400'}`}>
+              <button key={item.key} onClick={() => setView(item.key)} className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${view === item.key ? 'border-yellow-500 text-yellow-400' : 'border-transparent text-zinc-300 hover:text-yellow-400'}`}>
                 <item.icon className="w-4 h-4" />{item.label}
               </button>
             ))}
@@ -1300,6 +1532,7 @@ function App() {
         {view === 'analytics' && <AnalyticsView />}
         {view === 'products' && <ProductsView />}
         {view === 'users' && <UsersView currentUser={user} />}
+        {view === 'helpdesk' && <HelpDeskView user={user} />}
         {view === 'audit' && <AuditView />}
       </main>
     </div>
