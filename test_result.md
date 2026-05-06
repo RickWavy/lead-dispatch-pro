@@ -285,11 +285,14 @@ frontend:
     file: "/app/app/api/[[...path]]/route.js"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
         -working: true
         -agent: "main"
         -comment: "End-to-end smoke tested: Sale disposition auto-creates commission with flat amount + per-product splits. Approval workflow (Pending Approval → Approved). Leaderboard aggregates approved commissions by user (month + all-time). Agent role sees only their own splits. Endpoints: GET /api/commissions, GET /api/commissions/leaderboard, POST /api/commissions/:id/approve, POST /api/commissions/:id/reject."
+        -working: true
+        -agent: "testing"
+        -comment: "Comprehensive testing completed (10/10 tests passed): ✅ Product setup with commission config (commissionAmount, splitClosingPct, splitCreatorPct, splitFieldPct), ✅ Auto-generation on Sale (correct splits: closing=Naledi Agent 50%=R500, creator=Sipho Admin 30%=R300, NO field split for agent role), ✅ Idempotency (no duplicate commissions on re-sale), ✅ Auto-generation with non-existent product (totalCommission=0), ✅ Field agent split (3 splits including field role 20% when closing user is field), ✅ Approval workflow (agent 403, admin 200, idempotent approval, rejection), ✅ Leaderboard (accessible to all roles, correct monthKey format, sorted by allTime, only approved commissions counted), ✅ Role scoping (admin sees all, agent/field see only theirs with filtered splits, QA sees all), ✅ Audit log entries (COMMISSION_GENERATED, COMMISSION_APPROVED, COMMISSION_REJECTED), ✅ Invalid commission ID returns 404. All commission engine functionality working correctly."
 
 metadata:
   created_by: "main_agent"
@@ -416,3 +419,63 @@ agent_communication:
       - Shows leads with Pending status for review
       
       All UI components, role-based access control, form validations, and user interactions working correctly. No critical issues found.
+    -agent: "testing"
+    -message: |
+      ✅ COMMISSION ENGINE TESTING COMPLETED - ALL TESTS PASSED (10/10)
+      
+      Executed comprehensive commission engine testing covering all 10 scenarios from review request:
+      
+      1. ✅ Product Setup with Commission Config (Super Only):
+         - POST /api/products with commissionAmount=1000, splitClosingPct=50, splitCreatorPct=30, splitFieldPct=20
+         - Product created successfully with all commission fields
+         - Product appears in GET /api/products
+      
+      2. ✅ Auto-generation on Sale:
+         - Lead created with productType="Premium Tracker", assigneeId=agent, creatorId=admin
+         - PATCH disposition to "Sale" → commission auto-generated
+         - Commission details verified: leadName="Test Customer", totalCommission=1000, status="Pending Approval"
+         - Splits correct: closing=Naledi Agent (50%=R500), creator=Sipho Admin (30%=R300)
+         - Field split NOT included (closing user is agent role, not field) ✅
+      
+      3. ✅ Idempotency:
+         - PATCH same lead to "Sale" again → no new commission created
+         - Commission count unchanged, existing commission preserved
+      
+      4. ✅ Auto-generation with Non-Existent Product:
+         - Lead with productType="NonExistentProduct" → Sale
+         - Commission created with totalCommission=0 (no matching product)
+         - Splits exist but with 0 amounts
+      
+      5. ✅ Field Agent Split:
+         - Lead assigned to field user with productType="Premium Tracker" → Sale
+         - Commission has 3 splits: closing=Themba Field (50%=R500), creator=Sipho Admin (30%=R300), field=Themba Field (20%=R200)
+         - Field split correctly included when closing user role is "field"
+      
+      6. ✅ Approval Workflow (Super Only):
+         - POST /api/commissions/:id/approve as agent → 403 ✅
+         - POST /api/commissions/:id/approve as admin → 200 ✅
+         - Commission status="Approved", approvedBy/approvedByName/approvedAt populated
+         - Approving already-approved → 200 with "Already approved" message (idempotent) ✅
+         - POST /api/commissions/:id/reject as admin → 200, status="Rejected" ✅
+      
+      7. ✅ Leaderboard (Any Auth Role):
+         - GET /api/commissions/leaderboard accessible to all roles (admin, agent, field, qa)
+         - Returns {leaderboard: [{userId, name, allTime, month, deals}], monthKey: "2026-05"}
+         - Only APPROVED commissions counted (rejected and pending excluded)
+         - Sorted by allTime descending
+         - monthKey format correct (YYYY-MM, current UTC month)
+      
+      8. ✅ Role Scoping on /api/commissions:
+         - Admin → sees all commissions (4 total)
+         - Agent → sees only commissions where agent is in splits (3 total), splits filtered to only agent's entries
+         - Field → sees only their commissions (1 total)
+         - QA → sees all commissions (4 total, no scoping for QA)
+      
+      9. ✅ Audit Log Entries:
+         - GET /api/audit shows COMMISSION_GENERATED, COMMISSION_APPROVED, COMMISSION_REJECTED actions
+         - All expected audit entries present
+      
+      10. ✅ Edge Case - Invalid Commission ID:
+          - POST /api/commissions/invalid-id/approve → 404 ✅
+      
+      All commission engine endpoints working correctly with proper role-based access control, accurate commission calculations, correct split logic based on user roles, and comprehensive audit logging. No critical issues found.
