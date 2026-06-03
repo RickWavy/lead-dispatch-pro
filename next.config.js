@@ -1,6 +1,9 @@
-// next.config.js — enables `next start` and standalone build for Docker
-module.exports = {
-  reactStrictMode: true,
-  output: 'standalone',
-  // image domains can be added here if needed
-}
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  output: 'export',
+  images: {
+    unoptimized: true,
+  },
+};
+
+module.exports = nextConfig;
